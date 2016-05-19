@@ -24,7 +24,7 @@ class State {
     public $blocks = [];
 
     /**
-     * @var Op\Stmt\Class[][]
+     * @var Op\Stmt\Class_[][]
      */
     public $classMap = [];
 
@@ -54,7 +54,7 @@ class State {
     public $interfaces;
 
     /**
-     * @var Op\Stmt\Method[]
+     * @var Op\Stmt\ClassMethod[]
      */
     public $methods;
 
@@ -100,7 +100,7 @@ class State {
         $traverser->addVisitor($variables);
 
         for ($i = 0; $i < count($this->blocks); $i++) {
-            $this->blocks[$i] = $traverser->traverse($this->blocks[$i]);
+            $traverser->traverse($this->blocks[$i]);
         }
 
         $this->variables = $variables->getVariables();
@@ -137,23 +137,27 @@ class State {
         $interfaceMap = [];
         $classMap = [];
         $toProcess = [];
+        /** @var Op\Stmt\Interface_ $interface */
         foreach ($this->interfaces as $interface) {
             $name = strtolower($interface->name->value);
             $map[$name] = [$name => $interface];
             $interfaceMap[$name] = [];
             if ($interface->extends) {
                 foreach ($interface->extends as $extends) {
+                    assert($extends instanceof Operand\Literal);
                     $sub = strtolower($extends->value);
                     $interfaceMap[$name][] = $sub;
                     $map[$sub][$name] = $interface;
                 }
             }
         }
+        /** @var Op\Stmt\Class_ $class */
         foreach ($this->classes as $class) {
             $name = strtolower($class->name->value);
             $map[$name] = [$name => $class];
             $classMap[$name] = [$name];
             foreach ($class->implements as $interface) {
+                assert($interface instanceof Operand\Literal);
                 $iname = strtolower($interface->value);
                 $classMap[$name][] = $iname;
                 $map[$iname][$name] = $class;
@@ -165,6 +169,7 @@ class State {
                 }
             }
             if ($class->extends) {
+                assert($interface instanceof Operand\Literal);
                 $toProcess[] = [$name, strtolower($class->extends->value), $class];
             }
         }

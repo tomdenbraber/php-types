@@ -317,6 +317,17 @@ class TypeReconstructor {
     protected function resolveOp_Expr_FuncCall(Operand $var, Op\Expr\FuncCall $op, SplObjectStorage $resolved) {
         if ($op->name instanceof Operand\Literal) {
             $name = strtolower($op->name->value);
+            if ($op->namespace !== null && $op->namespace->value) {
+                $namespace = $op->namespace->value;
+                if ($name[0] === '\\') {    // name is fully qualified, do not lookup with namespace
+
+                } else {
+
+                }
+                $namespacedName = $namespace . '\\' . $name;
+            } else {
+
+            }
             if (isset($this->state->functionLookup[$name])) {
                 $result = [];
                 foreach ($this->state->functionLookup[$name] as $func) {
@@ -325,6 +336,36 @@ class TypeReconstructor {
                     } else {
                         // Check doc comment
                         $result[] = Type::extractTypeFromComment("return", $func->getAttribute('doccomment'));
+                    }
+                }
+                return $result;
+            } else {
+                if (isset($this->state->internalTypeInfo->functions[$name])) {
+                    $type = $this->state->internalTypeInfo->functions[$name];
+                    if (empty($type['return'])) {
+                        return false;
+                    }
+                    return [Type::fromDecl($type['return'])];
+                }
+            }
+        }
+        // we can't resolve the function
+        return false;
+    }
+
+    protected function resolveOp_Expr_NsFuncCall(Operand $var, Op\Expr\NsFuncCall $op, SplObjectStorage $resolved) {
+        if ($op->name instanceof Operand\Literal) {
+            $name = strtolower($op->nsName->value);
+            if (isset($this->state->functionLookup[$name])) {
+                $result = [];
+                /** @var Op\Stmt\Function_ $function */
+                foreach ($this->state->functionLookup[$name] as $function) {
+                    $func = $function->getFunc();
+                    if ($func->returnType) {
+                        $result[] = Type::fromDecl($func->returnType->value);
+                    } else {
+                        // Check doc comment
+                        $result[] = Type::extractTypeFromComment("return", $function->getAttribute('doccomment'));
                     }
                 }
                 return $result;
@@ -465,7 +506,7 @@ class TypeReconstructor {
     protected function findMethod($class, $name) {
         foreach ($class->stmts->children as $stmt) {
             if ($stmt instanceof Op\Stmt\ClassMethod) {
-                if (strtolower($stmt->name->value) === $name) {
+                if (strtolower($stmt->methodName) === $name) {
                     return $stmt;
                 }
             }
@@ -608,16 +649,18 @@ class TypeReconstructor {
                 return false;
             }
             foreach ($this->state->classResolves[$className] as $class) {
+                /** @var Op\Stmt\ClassMethod $method */
                 $method = $this->findMethod($class, $name);
                 if (!$method) {
                     continue;
                 }
                 $doc = Type::extractTypeFromComment("return", $method->getAttribute('doccomment'));
 
-                if (!$method->returnType) {
+                $func = $method->getFunc();
+                if (!$func->returnType) {
                     $types[] = $doc;
                 } else {
-                    $decl = Type::fromDecl($method->returnType->value);
+                    $decl = Type::fromDecl($func->returnType->value);
                     if ($this->state->resolver->resolves($doc, $decl)) {
                         // doc is a subset
                         $types[] = $doc;

@@ -412,6 +412,8 @@ class Type {
             return new Type(Type::TYPE_DOUBLE);
         } elseif (is_string($value)) {
             return new Type(Type::TYPE_STRING);
+        } else if (is_null($value)) {
+            return new Type(Type::TYPE_NULL);
         }
         throw new \RuntimeException("Unknown value type found: " . gettype($value));
     }
