@@ -82,8 +82,8 @@ class State {
         $traverser->addVisitor($calls);
         $traverser->addVisitor($variables);
 
-        for ($i = 0; $i < count($this->scripts); $i++) {
-            $traverser->traverse($this->scripts[$i]);
+        foreach ($this->scripts as $script) {
+            $traverser->traverse($script);
         }
 
         $this->variables = $variables->getVariables();
