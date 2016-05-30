@@ -19,9 +19,9 @@ use SplObjectStorage;
 
 class State {
     /** @var InternalArgInfo  */
-    private $internalTypeInfo;
+    public $internalTypeInfo;
     /** @var TypeResolver  */
-    private $resolver;
+    public $resolver;
     
     /** @var Block[] */
     public $scripts = [];
@@ -42,9 +42,10 @@ class State {
     public $interfaces;
     /** @var Op\Stmt\ClassMethod[] */
     public $methods;
+    /** @var Op\Stmt\ClassMethod[][] */
+    public $methodLookup;
     /** @var Op\Stmt\Function_[] */
     public $functions;
-
     /** @var Op\Stmt\Function_[][] */
     public $functionLookup;
 
@@ -101,10 +102,13 @@ class State {
         $this->computeTypeMatrix();
     }
 
+    /**
+     * @param Op\Stmt\Function_[] $functions
+     * @return Op\Stmt\Function_[][]
+     */
     private function buildFunctionLookup(array $functions) {
         $lookup = [];
         foreach ($functions as $function) {
-            assert($function->name instanceof Operand\Literal);
             $name = strtolower($function->name->value);
             if (!isset($lookup[$name])) {
                 $lookup[$name] = [];
