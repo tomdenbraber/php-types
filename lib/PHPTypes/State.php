@@ -12,78 +12,61 @@ namespace PHPTypes;
 use PHPCfg\Block;
 use PHPCfg\Op;
 use PHPCfg\Operand;
+use PHPCfg\Script;
 use PHPCfg\Traverser;
 use PHPCfg\Visitor;
 use SplObjectStorage;
 
 class State {
+    /** @var InternalArgInfo  */
+    private $internalTypeInfo;
+    /** @var TypeResolver  */
+    private $resolver;
     
-    /**
-     * @var Block[]
-     */
-    public $blocks = [];
-
-    /**
-     * @var Op\Stmt\Class_[][]
-     */
+    /** @var Block[] */
+    public $scripts = [];
+    
+    /** @var Op\Stmt\Class_[][] */
     public $classMap = [];
 
-    /**
-     * @var SplObjectStorage
-     */
+    /** @var SplObjectStorage */
     public $variables;
-    
-    /**
-     * @var Op\Terminal\Const_[]
-     */
-    public $constants;
-    
-    /**
-     * @var Op\Stmt\Trait_[]
-     */
+
+    /** @var Op\Terminal\Const_[] */
+    public $constants;    
+    /** @var Op\Stmt\Trait_[] */
     public $traits;
-    
-    /**
-     * @var Op\Stmt\Class_[]
-     */
+    /** @var Op\Stmt\Class_[] */
     public $classes;
-
-    /**
-     * @var Op\Stmt\Interface_[]
-     */
+    /** @var Op\Stmt\Interface_[] */
     public $interfaces;
-
-    /**
-     * @var Op\Stmt\ClassMethod[]
-     */
+    /** @var Op\Stmt\ClassMethod[] */
     public $methods;
-
-    /**
-     * @var Op\Stmt\Function_[]
-     */
+    /** @var Op\Stmt\Function_[] */
     public $functions;
 
-    /**
-     * @var Op\Stmt\Function_[][]
-     */
+    /** @var Op\Stmt\Function_[][] */
     public $functionLookup;
-
-    public $internalTypeInfo;
-
-    public $resolver;
-
-    public $callFinder;
 
     public $classResolves = [];
 
     public $classResolvedBy = [];
 
+    /** @var Op\Stmt\Function_[] */
+    public $funcCalls = [];
+    /** @var Op\Expr\NsFuncCall[] */
+    public $nsFuncCalls = [];
+    /** @var Op\Expr\MethodCall[] */
     public $methodCalls = [];
-
+    /** @var Op\Expr\New_[] */
     public $newCalls = [];
 
-    public function __construct(array $blocks) {
-        $this->blocks = $blocks;
+    /**
+     * State constructor.
+     * @param Script[] $scripts
+     */
+    public function __construct(array $scripts) {
+        $this->scripts = $scripts;
         $this->resolver = new TypeResolver($this);
         $this->internalTypeInfo = new InternalArgInfo;
         $this->load();
@@ -99,8 +82,8 @@ class State {
         $traverser->addVisitor($calls);
         $traverser->addVisitor($variables);
 
-        for ($i = 0; $i < count($this->blocks); $i++) {
-            $traverser->traverse($this->blocks[$i]);
+        for ($i = 0; $i < count($this->scripts); $i++) {
+            $traverser->traverse($this->scripts[$i]);
         }
 
         $this->variables = $variables->getVariables();
@@ -111,9 +94,10 @@ class State {
         $this->methods = $declarations->getMethods();
         $this->functions = $declarations->getFunctions();
         $this->functionLookup = $this->buildFunctionLookup($declarations->getFunctions());
-        $this->callFinder = $calls;
-        $this->methodCalls = $this->findMethodCalls();
-        $this->newCalls = $this->findNewCalls();
+        $this->funcCalls = $calls->getFuncCalls();
+        $this->nsFuncCalls = $calls->getNsFuncCalls();
+        $this->methodCalls = $calls->getMethodCalls();
+        $this->newCalls = $calls->getNewCalls();
         $this->computeTypeMatrix();
     }
 
@@ -196,53 +180,5 @@ class State {
                 $this->classResolvedBy[$name][$child] = $child;
             }
         }
-    }
-
-    private function findNewCalls() {
-        $newCalls = [];
-        foreach ($this->blocks as $block) {
-            $newCalls = $this->findTypedBlock("Expr_New", $block, $newCalls);
-        }
-        return $newCalls;
-    }
-
-    private function findMethodCalls() {
-        $methodCalls = [];
-        foreach ($this->blocks as $block) {
-            $methodCalls = $this->findTypedBlock("Expr_MethodCall", $block, $methodCalls);
-        }
-        return $methodCalls;
-    }
-
-    protected function findTypedBlock($type, Block $block, $result = []) {
-        $toProcess = new SplObjectStorage;
-        $processed = new SplObjectStorage;
-        $toProcess->attach($block);
-        while (count($toProcess) > 0) {
-            foreach ($toProcess as $block) {
-                $toProcess->detach($block);
-                $processed->attach($block);
-                foreach ($block->children as $op) {
-                    if ($op->getType() === $type) {
-                        $result[] = $op;
-                    }
-                    foreach ($op->getSubBlocks() as $name) {
-                        $sub = $op->$name;
-                        if (is_null($sub)) {
-                            continue;
-                        }
-                        if (!is_array($sub)) {
-                            $sub = [$sub];
-                        }
-                        foreach ($sub as $subb) {
-                            if (!$processed->contains($subb)) {
-                                $toProcess->attach($subb);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return $result;
     }
 }
