@@ -53,7 +53,7 @@ class State {
 
     public $classResolvedBy = [];
 
-    /** @var Op\Stmt\Function_[] */
+    /** @var Op\Expr\FuncCall[] */
     public $funcCalls = [];
     /** @var Op\Expr\NsFuncCall[] */
     public $nsFuncCalls = [];
@@ -109,7 +109,7 @@ class State {
     private function buildFunctionLookup(array $functions) {
         $lookup = [];
         foreach ($functions as $function) {
-            $name = strtolower($function->name->value);
+            $name = strtolower($function->func->name);
             if (!isset($lookup[$name])) {
                 $lookup[$name] = [];
             }
