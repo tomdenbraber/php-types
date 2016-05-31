@@ -317,36 +317,10 @@ class TypeReconstructor {
     protected function resolveOp_Expr_FuncCall(Operand $var, Op\Expr\FuncCall $op, SplObjectStorage $resolved) {
         if ($op->name instanceof Operand\Literal) {
             $name = strtolower($op->name->value);
-            if ($op->namespace !== null && $op->namespace->value) {
-                $namespace = $op->namespace->value;
-                if ($name[0] === '\\') {    // name is fully qualified, do not lookup with namespace
-
-                } else {
-
-                }
-                $namespacedName = $namespace . '\\' . $name;
-            } else {
-
-            }
             if (isset($this->state->functionLookup[$name])) {
-                $result = [];
-                foreach ($this->state->functionLookup[$name] as $func) {
-                    if ($func->returnType) {
-                        $result[] = Type::fromDecl($func->returnType->value);
-                    } else {
-                        // Check doc comment
-                        $result[] = Type::extractTypeFromComment("return", $func->getAttribute('doccomment'));
-                    }
-                }
-                return $result;
+                return $this->resolveFunctionsType($this->state->functionLookup[$name]);
             } else {
-                if (isset($this->state->internalTypeInfo->functions[$name])) {
-                    $type = $this->state->internalTypeInfo->functions[$name];
-                    if (empty($type['return'])) {
-                        return false;
-                    }
-                    return [Type::fromDecl($type['return'])];
-                }
+                return $this->resolveInternalFunctionType($name);
             }
         }
         // we can't resolve the function
@@ -354,32 +328,48 @@ class TypeReconstructor {
     }
 
     protected function resolveOp_Expr_NsFuncCall(Operand $var, Op\Expr\NsFuncCall $op, SplObjectStorage $resolved) {
-        if ($op->name instanceof Operand\Literal) {
-            $name = strtolower($op->nsName->value);
-            if (isset($this->state->functionLookup[$name])) {
-                $result = [];
-                /** @var Op\Stmt\Function_ $function */
-                foreach ($this->state->functionLookup[$name] as $function) {
-                    $func = $function->getFunc();
-                    if ($func->returnType) {
-                        $result[] = Type::fromDecl($func->returnType->value);
-                    } else {
-                        // Check doc comment
-                        $result[] = Type::extractTypeFromComment("return", $function->getAttribute('doccomment'));
-                    }
-                }
-                return $result;
+        assert($op->nsName instanceof Operand\Literal);
+        assert($op->name instanceof Operand\Literal);
+        $functions = null;
+        $nsName = strtolower($op->nsName->value);
+        $name = strtolower($op->name->value);
+        if (isset($this->state->functionLookup[$nsName])) {
+            $functions = $this->state->functionLookup[$nsName];
+        } elseif (isset($this->state->functionLookup[$name])) {
+            $functions = $this->state->functionLookup[$name];
+        }
+
+        if ($functions !== null) {
+            return $this->resolveFunctionsType($functions);
+        }
+
+        return $this->resolveInternalFunctionType($name);
+    }
+
+    private function resolveFunctionsType($functions) {
+        assert(!empty($functions));
+        $result = [];
+        foreach ($functions as $function) {
+            $func = $function->func;
+            if ($func->returnType) {
+                $result[] = Type::fromDecl($func->returnType->value);
             } else {
-                if (isset($this->state->internalTypeInfo->functions[$name])) {
-                    $type = $this->state->internalTypeInfo->functions[$name];
-                    if (empty($type['return'])) {
-                        return false;
-                    }
-                    return [Type::fromDecl($type['return'])];
-                }
+                // Check doc comment
+                $result[] = Type::extractTypeFromComment("return", $function->getAttribute('doccomment'));
             }
         }
-        // we can't resolve the function
+        return $result;
+    }
+
+    private function resolveInternalFunctionType($name) {
+        if (isset($this->state->internalTypeInfo->functions[$name])) {
+            $type = $this->state->internalTypeInfo->functions[$name];
+            if (empty($type['return'])) {
+                return false;
+            }
+            return [Type::fromDecl($type['return'])];
+        }
+
         return false;
     }
 
@@ -392,7 +382,8 @@ class TypeReconstructor {
     }
 
     protected function resolveOp_Expr_Param(Operand $var, Op\Expr\Param $op, SplObjectStorage $resolved) {
-        $docType = Type::extractTypeFromComment("param", $op->function->getAttribute('doccomment'), $op->name->value);
+        assert(isset($op->function->callable_op));
+        $docType = Type::extractTypeFromComment("param", $op->function->callable_op->getAttribute('doccomment'), $op->name->value);
         if ($op->type) {
             $type = Type::fromDecl($op->type->value);
             if ($op->defaultVar) {
@@ -506,7 +497,8 @@ class TypeReconstructor {
     protected function findMethod($class, $name) {
         foreach ($class->stmts->children as $stmt) {
             if ($stmt instanceof Op\Stmt\ClassMethod) {
-                if (strtolower($stmt->methodName) === $name) {
+                $func = $stmt->func;
+                if (strtolower($func->name) === $name) {
                     return $stmt;
                 }
             }
