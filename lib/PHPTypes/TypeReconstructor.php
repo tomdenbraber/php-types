@@ -302,7 +302,7 @@ class TypeReconstructor {
         }
         return false;
     }
-     
+
     protected function resolveOp_Expr_Clone(Operand $var, Op\Expr\Clone_ $op, SplObjectStorage $resolved) {
         if ($resolved->contains($op->expr)) {
             return [$resolved[$op->expr]];
@@ -466,6 +466,16 @@ class TypeReconstructor {
                 return false;
             }
             return $this->resolveClassConstant(strtolower($type->userType), $op, $resolved);
+        }
+        return false;
+    }
+
+    protected function resolveOp_Terminal_StaticVar(Operand $var, Op\Terminal\StaticVar $op, SplObjectStorage $resolved) {
+        if ($op->defaultVar === null) {
+            return [Type::null()];
+        }
+        if ($resolved->contains($op->defaultVar)) {
+            return [$resolved[$op->defaultVar]];
         }
         return false;
     }
