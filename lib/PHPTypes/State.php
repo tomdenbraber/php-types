@@ -22,10 +22,10 @@ class State {
     public $internalTypeInfo;
     /** @var TypeResolver  */
     public $resolver;
-    
+
     /** @var Block[] */
     public $scripts = [];
-    
+
     /** @var Op\Stmt\Class_[][] */
     public $classMap = [];
 
@@ -33,7 +33,7 @@ class State {
     public $variables;
 
     /** @var Op\Terminal\Const_[] */
-    public $constants;    
+    public $constants;
     /** @var Op\Stmt\Trait_[] */
     public $traits;
     /** @var Op\Stmt\Class_[] */
@@ -160,7 +160,7 @@ class State {
                 }
             }
             if ($class->extends) {
-                assert($interface instanceof Operand\Literal);
+                assert($class->extends instanceof Operand\Literal);
                 $toProcess[] = [$name, strtolower($class->extends->value), $class];
             }
         }
