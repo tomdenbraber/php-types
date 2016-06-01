@@ -59,6 +59,8 @@ class State {
     public $nsFuncCalls = [];
     /** @var Op\Expr\MethodCall[] */
     public $methodCalls = [];
+    /** @var Op\Expr\StaticCall[] */
+    public $staticCalls = [];
     /** @var Op\Expr\New_[] */
     public $newCalls = [];
 
@@ -98,6 +100,7 @@ class State {
         $this->funcCalls = $calls->getFuncCalls();
         $this->nsFuncCalls = $calls->getNsFuncCalls();
         $this->methodCalls = $calls->getMethodCalls();
+        $this->staticCalls = $calls->getStaticCalls();
         $this->newCalls = $calls->getNewCalls();
         $this->computeTypeMatrix();
     }

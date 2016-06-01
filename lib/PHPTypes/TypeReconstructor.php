@@ -382,8 +382,8 @@ class TypeReconstructor {
     }
 
     protected function resolveOp_Expr_Param(Operand $var, Op\Expr\Param $op, SplObjectStorage $resolved) {
-        assert(isset($op->function->callable_op));
-        $docType = Type::extractTypeFromComment("param", $op->function->callable_op->getAttribute('doccomment'), $op->name->value);
+        assert(isset($op->function->callableOp));
+        $docType = Type::extractTypeFromComment("param", $op->function->callableOp->getAttribute('doccomment'), $op->name->value);
         if ($op->type) {
             $type = Type::fromDecl($op->type->value);
             if ($op->defaultVar) {
