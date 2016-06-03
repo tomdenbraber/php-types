@@ -15,7 +15,7 @@ use PHPCfg\Operand;
 use SplObjectStorage;
 
 class TypeReconstructor {
-
+    /** @var  State */
     protected $state;
 
     public function resolve(State $state) {
@@ -295,7 +295,7 @@ class TypeReconstructor {
 
     protected function resolveOp_Expr_Cast_Object(Operand $var, Op\Expr\Cast\Object_ $op, SplObjectStorage $resolved) {
         if ($resolved->contains($op->expr)) {
-            if ($resolved[$op->expr]->type->resolves(Type::object())) {
+            if ($this->state->resolver->resolves($resolved[$op->expr], Type::object())) {
                 return [$resolved[$op->expr]];
             }
             return [new Type(Type::TYPE_OBJECT, [], 'stdClass')];
