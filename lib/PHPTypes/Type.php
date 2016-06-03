@@ -319,7 +319,7 @@ class Type {
             case 'string':
                 return new Type(Type::TYPE_STRING);
             case 'array':
-                return new Type(Type::TYPE_ARRAY, [Type::mixed()]);
+                return new Type(Type::TYPE_ARRAY);
             case 'callable':
                 return new Type(Type::TYPE_CALLABLE);
             case 'null':
