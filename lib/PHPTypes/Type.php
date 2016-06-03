@@ -461,11 +461,12 @@ class Type {
      * @return Type the removed type
      */
     public function removeType(Type $type) {
-        if (!isset(self::$hasSubtypes[$this->type])) {
-            if ($this->equals($type)) {
-                // left with an unknown type
-                return Type::null();
-            }
+        if ($this->equals($type)) {
+            // left with an unknown type
+            return Type::null();
+        }
+        if ($this->type !== self::TYPE_UNION) {
+            // removing from a non-union type does not make sense, so just ignore and return original type
             return $this;
         }
         $new = [];
