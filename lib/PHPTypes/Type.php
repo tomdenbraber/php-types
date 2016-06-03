@@ -17,7 +17,7 @@ class Type {
     const TYPE_LONG         = 3;
     const TYPE_DOUBLE       = 4;
     const TYPE_STRING       = 5;
-    
+
     const TYPE_OBJECT       = 6;
     const TYPE_ARRAY        = 7;
     const TYPE_CALLABLE     = 8;
@@ -25,7 +25,7 @@ class Type {
     const TYPE_UNION        = 10;
     const TYPE_INTERSECTION = 11;
 
-    /** 
+    /**
      * @var int[]
      */
     protected static $hasSubtypes = [
@@ -319,7 +319,7 @@ class Type {
             case 'string':
                 return new Type(Type::TYPE_STRING);
             case 'array':
-                return new Type(Type::TYPE_ARRAY);
+                return new Type(Type::TYPE_ARRAY, [Type::mixed()]);
             case 'callable':
                 return new Type(Type::TYPE_CALLABLE);
             case 'null':
