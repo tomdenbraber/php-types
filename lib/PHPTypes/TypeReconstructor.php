@@ -387,7 +387,7 @@ class TypeReconstructor {
         if ($op->type) {
             $type = Type::fromDecl($op->type->value);
             if ($op->defaultVar) {
-                if ($op->defaultBlock->children[0]->getType() === "Expr_ConstFetch" && strtolower($op->defaultBlock->children[0]->name->value) === "null") {
+                if (!empty($op->defaultBlock->children) && $op->defaultBlock->children[0]->getType() === "Expr_ConstFetch" && strtolower($op->defaultBlock->children[0]->name->value) === "null") {
                     $type = (new Type(Type::TYPE_UNION, [$type, Type::null()]))->simplify();
                 }
             }
