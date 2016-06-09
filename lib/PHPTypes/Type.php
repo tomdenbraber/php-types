@@ -338,7 +338,7 @@ class Type {
         }
         $regex = '(^([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*\\\\)*[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*$)';
         if (!preg_match($regex, $decl)) {
-            throw new \RuntimeException("Unknown type declaration found: $decl");
+            return Type::unknown();
         }
         return new Type(Type::TYPE_OBJECT, [], $decl);
     }
