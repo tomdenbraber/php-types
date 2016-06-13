@@ -291,7 +291,7 @@ class Type {
         } elseif (!is_string($decl)) {
             throw new \LogicException("Should never happen");
         } elseif (empty($decl)) {
-            throw new \RuntimeException("Empty declaration found");
+            return Type::unknown();
         }
         if ($decl[0] === '\\') {
             $decl = substr($decl, 1);
