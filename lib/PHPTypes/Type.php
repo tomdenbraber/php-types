@@ -309,7 +309,7 @@ class Type {
             $decl = substr($decl, 1);
         } elseif ($decl[0] === '?') {
             $decl = substr($decl, 1);
-            $type = Type::fromDecl($decl);
+            $type = Type::parseDecl($decl);
             return (new Type(Type::TYPE_UNION, [
                 $type,
                 new Type(Type::TYPE_NULL)
@@ -338,14 +338,14 @@ class Type {
             case 'void':
                 return new Type(Type::TYPE_NULL);
             case 'numeric':
-                return Type::fromDecl('int|float');
+                return Type::parseDecl('int|float');
         }
         // TODO: parse | and & and ()
         if (strpos($decl, '|') !== false || strpos($decl, '&') !== false || strpos($decl, '(') !== false) {
             return self::parseCompexDecl($decl)->simplify();
         }
         if (substr($decl, -2) === '[]') {
-            $type = Type::fromDecl(substr($decl, 0, -2));
+            $type = Type::parseDecl(substr($decl, 0, -2));
             return new Type(Type::TYPE_ARRAY, [$type]);
         }
         $regex = '(^([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*\\\\)*[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*$)';
@@ -369,7 +369,7 @@ class Type {
             $match = [];
             if (preg_match($regex, $decl, $match)) {
                 $sub = (string) $match[0];
-                $left = self::fromDecl(substr($sub, 1, -1));
+                $left = self::parseDecl(substr($sub, 1, -1));
                 if ($sub === $decl) {
                     return $left;
                 }
@@ -380,7 +380,7 @@ class Type {
             if (!in_array(substr($decl, 0, 1), ['|', '&'])) {
                 throw new \RuntimeException("Unknown position of combinator: $decl");
             }
-            $right = self::fromDecl(substr($decl, 1));
+            $right = self::parseDecl(substr($decl, 1));
             $combinator = substr($decl, 0, 1);
         } else {
             $orPos = strpos($decl, '|');
@@ -398,8 +398,8 @@ class Type {
             if ($pos === 0) {
                 throw new \RuntimeException("Unknown position of combinator: $decl");
             }
-            $left = self::fromDecl(substr($decl, 0, $pos));
-            $right = self::fromDecl(substr($decl, $pos + 1));
+            $left = self::parseDecl(substr($decl, 0, $pos));
+            $right = self::parseDecl(substr($decl, $pos + 1));
             $combinator = substr($decl, $pos, 1);
         }
         if ($combinator === '|') {
