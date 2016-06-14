@@ -282,16 +282,28 @@ class Type {
 
     /**
      * @param string $decl
-     *
      * @return Type The type
      */
     public static function fromDecl($decl) {
+        try {
+            return self::parseDecl($decl);
+        } catch (\RuntimeException $e) {
+            return Type::mixed();
+        }
+    }
+
+    /**
+     * @param string $decl
+     * @return Type The type
+     * @throws \RuntimeException
+     */
+    public static function parseDecl($decl) {
         if ($decl instanceof Type) {
             return $decl;
         } elseif (!is_string($decl)) {
             throw new \LogicException("Should never happen");
         } elseif (empty($decl)) {
-            return Type::unknown();
+            throw new \RuntimeException("Empty declaration found");
         }
         if ($decl[0] === '\\') {
             $decl = substr($decl, 1);
@@ -338,7 +350,7 @@ class Type {
         }
         $regex = '(^([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*\\\\)*[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*$)';
         if (!preg_match($regex, $decl)) {
-            return Type::unknown();
+            throw new \RuntimeException("Unknown type declaration found: $decl");
         }
         return new Type(Type::TYPE_OBJECT, [], $decl);
     }
