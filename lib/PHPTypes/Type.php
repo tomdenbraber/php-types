@@ -488,7 +488,8 @@ class Type {
             }
         }
         if (empty($new)) {
-            throw new \LogicException('Unknown type encountered');
+            // left with an unknown type
+            return Type::null();
         } elseif (count($new) === 1) {
             return $new[0];
         }
