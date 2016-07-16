@@ -165,7 +165,7 @@ class State {
 					if (!isset($this->classResolves[$name][$ppname])) {
 						$this->classResolves[$name][$ppname] = $ppname;
 						$this->classResolvedBy[$ppname][$name] = $name;
-						$queue[] = $pname;  // propagate up
+						$queue[$pname] = $pname;  // propagate up
 					}
 			    }
 		    }
@@ -174,7 +174,7 @@ class State {
 				    if (!isset($this->classResolvedBy[$name][$ssname])) {
 					    $this->classResolves[$ssname][$name] = $name;
 				    	$this->classResolvedBy[$name][$ssname] = $ssname;
-					    $queue[] = $sname;  // propagate down
+					    $queue[$sname] = $sname;  // propagate down
 				    }
 			    }
 		    }
