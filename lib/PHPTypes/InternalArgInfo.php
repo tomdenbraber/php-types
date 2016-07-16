@@ -8510,6 +8510,16 @@ class InternalArgInfo {
      */
     public $methods = [];
 
+	/**
+	 * @var string[]
+	 */
+	public $classResolves = [];
+
+	/**
+	 * @var string[]
+	 */
+	public $classResolvedBy = [];
+
     public function __construct() {
         // load the typeinfo:
         foreach ($this->info as $key => $info) {
@@ -8519,12 +8529,9 @@ class InternalArgInfo {
                 $parts = explode('::', $key);
                 $class = strtolower($parts[0]);
                 if (!isset($this->methods[$class])) {
-                    $this->methods[$class] = [
-                        'extends' => [],
-                        'methods' => []
-                    ];
+                    $this->methods[$class] = [];
                 }
-                $this->methods[$class]['methods'][strtolower($parts[1])] = $this->parseInfo($info);
+                $this->methods[$class][strtolower($parts[1])] = $this->parseInfo($info);
             }
         }
         $this->loadReflectables();
@@ -8550,27 +8557,47 @@ class InternalArgInfo {
     protected function loadReflectables() {
         $data = array_merge(get_declared_classes(), get_declared_interfaces());
         foreach ($data as $class) {
-            $r = new \ReflectionClass($class);
-            if (!$r->isInternal()) {
+            $rclass = new \ReflectionClass($class);
+            if (!$rclass->isInternal()) {
                 continue;
             }
-            $name = strtolower($r->name);
-            if (!isset($this->methods[$name])) {
-                $this->methods[$name] = [
-                    'extends' => [],
-                    'methods' => []
-                ];
-                // TODO: load methods
-            }
+            $name_lower = strtolower($rclass->name);
+	        if (isset($this->methods[$name_lower]) === false) {
+	        	$this->methods[$name_lower] = [];
+	        }
+	        foreach ($rclass->getMethods() as $rmethod) {
+	        	$rmethodname_lower = strtolower($rmethod->getName());
+	        	if (!isset($this->methods[$name_lower][$rmethodname_lower])) {
+	        		if (version_compare(phpversion(), '7.0.0', '>')) {
+				        $return_type = $rmethod->hasReturnType() ? Type::fromDecl((string) $rmethod->getReturnType()) : Type::mixed();
+				        $param_types = [];
+				        foreach ($rmethod->getParameters() as $rparam) {
+					        $param_types[] = ['name' => $rparam->getName(), 'type' => $rparam->hasType() ? Type::fromDecl((string) $rparam->getType()) : Type::mixed()];
+				        }
+			        } else {
+				        $return_type = Type::mixed();
+				        $param_types = [];
+				        foreach ($rmethod->getParameters() as $rparam) {
+					        $param_types[] = ['name' => $rparam->getName(), 'type' => Type::mixed()];
+				        }
+			        }
+			        
+			        $this->methods[$name_lower][$rmethodname_lower] = [
+		                'return' => $return_type,
+				        'params' => $param_types
+			        ];
+		        }
+	        }
             do {
-                $this->methods[$name]['extends'][] = strtolower($r->name);
-                foreach ($r->getInterfaceNames() as $iname) {
-                    $this->methods[$name]['extends'][] = strtolower($iname);
+	            $rclassname_lower = strtolower($rclass->name);
+                $this->classResolves[$name_lower][$rclassname_lower] = $rclassname_lower;
+	            $this->classResolvedBy[$rclassname_lower][$name_lower] = $name_lower;
+                foreach ($rclass->getInterfaceNames() as $iname) {
+                	$iname_lower = strtolower($iname);
+	                $this->classResolves[$name_lower][$iname_lower] = $iname_lower;
+	                $this->classResolvedBy[$iname_lower][$name_lower] = $name_lower;
                 }
-            } while ($r = $r->getParentClass());
-            $this->methods[$name]['extends'] = array_unique($this->methods[$name]['extends']);
+            } while ($rclass = $rclass->getParentClass());
         }
     }
-
-
 }
