@@ -172,8 +172,8 @@ class State {
 		    foreach ($this->classResolvedBy[$name] as $sname) {
 		    	foreach ($this->classResolvedBy[$sname] as $ssname) {
 				    if (!isset($this->classResolvedBy[$name][$ssname])) {
+					    $this->classResolvedBy[$name][$ssname] = $ssname;
 					    $this->classResolves[$ssname][$name] = $name;
-				    	$this->classResolvedBy[$name][$ssname] = $ssname;
 					    $queue[$sname] = $sname;  // propagate down
 				    }
 			    }
