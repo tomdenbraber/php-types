@@ -72,6 +72,8 @@ class State {
         $this->scripts = $scripts;
         $this->resolver = new TypeResolver($this);
         $this->internalTypeInfo = new InternalArgInfo;
+	    $this->classResolves = $this->internalTypeInfo->classResolves;
+	    $this->classResolvedBy = $this->internalTypeInfo->classResolvedBy;
         $this->load();
     }
 
@@ -122,70 +124,60 @@ class State {
     }
 
     private function computeTypeMatrix() {
-        // TODO: This is dirty, and needs cleaning
-        // A extends B
-        $map = []; // a => [a, b], b => [b]
-        $interfaceMap = [];
-        $classMap = [];
-        $toProcess = [];
-        /** @var Op\Stmt\Interface_ $interface */
-        foreach ($this->interfaces as $interface) {
-            $name = strtolower($interface->name->value);
-            $map[$name] = [$name => $interface];
-            $interfaceMap[$name] = [];
-            if ($interface->extends) {
-                foreach ($interface->extends as $extends) {
-                    assert($extends instanceof Operand\Literal);
-                    $sub = strtolower($extends->value);
-                    $interfaceMap[$name][] = $sub;
-                    $map[$sub][$name] = $interface;
-                }
-            }
-        }
-        /** @var Op\Stmt\Class_ $class */
-        foreach ($this->classes as $class) {
-            $name = strtolower($class->name->value);
-            $map[$name] = [$name => $class];
-            $classMap[$name] = [$name];
-            foreach ($class->implements as $interface) {
-                assert($interface instanceof Operand\Literal);
-                $iname = strtolower($interface->value);
-                $classMap[$name][] = $iname;
-                $map[$iname][$name] = $class;
-                if (isset($interfaceMap[$iname])) {
-                    foreach ($interfaceMap[$iname] as $sub) {
-                        $classMap[$name][] = $sub;
-                        $map[$sub][$name] = $class;
-                    }
-                }
-            }
-            if ($class->extends) {
-                assert($class->extends instanceof Operand\Literal);
-                $toProcess[] = [$name, strtolower($class->extends->value), $class];
-            }
-        }
-        foreach ($toProcess as $ext) {
-            $name = $ext[0];
-            $extends = $ext[1];
-            $class = $ext[2];
-            if (isset($classMap[$extends])) {
-                foreach ($classMap[$extends] as $mapped) {
-                    $map[$mapped][$name] = $class;
-                }
-            } else {
-                echo "Could not find parent $extends\n";
-            }
-        }
-        $this->classResolves = $map;
-        $this->classResolvedBy = [];
-        foreach ($map as $child => $parent) {
-            foreach ($parent as $name => $_) {
-                if (!isset($this->classResolvedBy[$name])) {
-                    $this->classResolvedBy[$name] = [];
-                }
-                //allows iterating and looking udm_cat_path(agent, category)
-                $this->classResolvedBy[$name][$child] = $child;
-            }
-        }
+	    foreach ($this->interfaces as $interface) {
+	    	$name = strtolower($interface->name->value);
+		    $this->classResolves[$name][$name] = $name;
+		    $this->classResolvedBy[$name][$name] = $name;
+		    if ($interface->extends !== null) {
+		    	foreach ($interface->extends as $extends) {
+				    assert($extends instanceof Operand\Literal);
+				    $pname = strtolower($extends->value);
+				    $this->classResolves[$name][$pname] = $pname;
+				    $this->classResolvedBy[$pname][$name] = $name;
+			    }
+		    }
+	    }
+	    foreach ($this->classes as $class) {
+	    	$name = strtolower($class->name->value);
+		    $this->classResolves[$name][$name] = $name;
+		    $this->classResolvedBy[$name][$name] = $name;
+		    if ($class->extends !== null) {
+			    assert($class->extends instanceof Operand\Literal);
+			    $pname = strtolower($class->extends->value);
+			    $this->classResolves[$name][$pname] = $pname;
+			    $this->classResolvedBy[$pname][$name] = $name;
+		    }
+		    foreach ($class->implements as $implements) {
+			    assert($implements instanceof Operand\Literal);
+			    $iname = strtolower($implements->value);
+			    $this->classResolves[$name][$iname] = $iname;
+			    $this->classResolvedBy[$iname][$name] = $name;
+		    }
+	    }
+
+	    // compute transitive closure
+	    $all_classes = array_keys($this->classResolves);
+	    $queue = array_combine($all_classes, $all_classes);
+	    while (!empty($queue)) {
+	    	$name = array_shift($queue);
+		    foreach ($this->classResolves[$name] as $pname) {
+		    	foreach ($this->classResolves[$pname] as $ppname) {
+					if (!isset($this->classResolves[$name][$ppname])) {
+						$this->classResolves[$name][$ppname] = $ppname;
+						$this->classResolvedBy[$ppname][$name] = $name;
+						$queue[] = $pname;  // propagate up
+					}
+			    }
+		    }
+		    foreach ($this->classResolvedBy[$name] as $sname) {
+		    	foreach ($this->classResolvedBy[$sname] as $ssname) {
+				    if (!isset($this->classResolvedBy[$name][$ssname])) {
+					    $this->classResolves[$ssname][$name] = $name;
+				    	$this->classResolvedBy[$name][$ssname] = $ssname;
+					    $queue[] = $sname;  // propagate down
+				    }
+			    }
+		    }
+	    }
     }
 }
