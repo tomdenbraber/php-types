@@ -1,0 +1,82 @@
+<?php
+
+class A {
+	public function foo() : int {
+		return 1;
+	}
+}
+
+class B extends A {
+	public function foo() : string {
+		return 'foo';
+	}
+}
+
+class C extends B {
+	public function foo() : bool {
+		return true;
+	}
+}
+
+class D {
+	public function bar(B $b) {
+		return $b->foo();
+	}
+}
+-----
+Block#1
+    Stmt_Class
+        name: LITERAL<string>('A')
+        stmts: Block#2
+    Stmt_Class
+        name: LITERAL<string>('B')
+        extends: LITERAL<string>('A')
+        stmts: Block#3
+    Stmt_Class
+        name: LITERAL<string>('C')
+        extends: LITERAL<string>('B')
+        stmts: Block#4
+    Stmt_Class
+        name: LITERAL<string>('D')
+        stmts: Block#5
+    Terminal_Return
+        expr: LITERAL<int>(1)
+
+Block#2
+    Stmt_ClassMethod<foo>
+
+Block#3
+    Stmt_ClassMethod<foo>
+
+Block#4
+    Stmt_ClassMethod<foo>
+
+Block#5
+    Stmt_ClassMethod<bar>
+
+Function A::foo():
+Block#1
+    Terminal_Return
+        expr: LITERAL<int>(1)
+
+Function B::foo():
+Block#1
+    Terminal_Return
+        expr: LITERAL<string>('foo')
+
+Function C::foo():
+Block#1
+    Terminal_Return
+        expr: LITERAL<bool>(true)
+
+Function D::bar():
+Block#1
+    Expr_Param
+        name: LITERAL('b')
+        result: Var<B>#1<$b>
+    Expr_MethodCall
+        var: Var<B>#1<$b>
+        name: LITERAL<string>('foo')
+        result: Var<string|bool>#2
+    Terminal_Return
+        expr: Var<string|bool>#2

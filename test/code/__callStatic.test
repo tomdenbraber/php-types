@@ -1,0 +1,39 @@
+<?php
+
+class A {
+	public function foo() {
+		return A::bar();
+	}
+
+	public function __callStatic() : int {
+		return floor();
+	}
+}
+-----
+Block#1
+    Stmt_Class
+        name: LITERAL<string>('A')
+        stmts: Block#2
+    Terminal_Return
+        expr: LITERAL<int>(1)
+
+Block#2
+    Stmt_ClassMethod<foo>
+    Stmt_ClassMethod<__callStatic>
+
+Function A::foo():
+Block#1
+    Expr_StaticCall
+        class: LITERAL<string>('A')
+        name: LITERAL<string>('bar')
+        result: Var<int>#1
+    Terminal_Return
+        expr: Var<int>#1
+
+Function A::__callStatic():
+Block#1
+    Expr_FuncCall
+        name: LITERAL<string>('floor')
+        result: Var<int>#1
+    Terminal_Return
+        expr: Var<int>#1

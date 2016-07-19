@@ -1,0 +1,39 @@
+<?php
+
+class A {
+	public function foo() {
+		return $this->bar();
+	}
+
+	public function __call() : int {
+		return floor();
+	}
+}
+-----
+Block#1
+    Stmt_Class
+        name: LITERAL<string>('A')
+        stmts: Block#2
+    Terminal_Return
+        expr: LITERAL<int>(1)
+
+Block#2
+    Stmt_ClassMethod<foo>
+    Stmt_ClassMethod<__call>
+
+Function A::foo():
+Block#1
+    Expr_MethodCall
+        var: this<<A>$this>
+        name: LITERAL<string>('bar')
+        result: Var<int>#1
+    Terminal_Return
+        expr: Var<int>#1
+
+Function A::__call():
+Block#1
+    Expr_FuncCall
+        name: LITERAL<string>('floor')
+        result: Var<int>#1
+    Terminal_Return
+        expr: Var<int>#1
