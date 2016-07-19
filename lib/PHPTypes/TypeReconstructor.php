@@ -504,19 +504,31 @@ class TypeReconstructor {
         return false;
     }
 
-    protected function findMethod($class, $name) {
-        foreach ($class->stmts->children as $stmt) {
-            if ($stmt instanceof Op\Stmt\ClassMethod) {
-                $func = $stmt->func;
-                if (strtolower($func->name) === $name) {
-                    return $stmt;
-                }
-            }
-        }
-        if ($name !== '__call') {
-            return $this->findMethod($class, '__call');
-        }
-        return null;
+    protected function resolveMethodReturnTypes($class, $name) {
+	    $types = [];
+    	if (isset($this->state->methodLookup[$class][$name])) {
+    		/** @var Op\Stmt\ClassMethod $classmethod */
+		    foreach ($this->state->methodLookup[$class][$name] as $classmethod) {
+			    $doctype = Type::extractTypeFromComment("return", $classmethod->getAttribute('doccomment'));
+			    $func = $classmethod->getFunc();
+			    if ($func->returnType) {
+			    	$decltype = Type::fromDecl($func->returnType->value);
+				    $types[] = $this->state->resolver->resolves($doctype, $decltype) ? $doctype : $decltype;
+			    } else {
+				    $types[] = $doctype;
+			    }
+		    }
+	    } else if (isset($this->state->internalTypeInfo->methods[$class][$name])) {
+	    	$method = $this->state->internalTypeInfo->methods[$class][$name];
+		    if (isset($method['return'])) {
+		    	$types[] = Type::fromDecl($method['return']);
+		    }
+	    } else if (isset($this->state->classExtends[$class])) {
+	    	foreach ($this->resolveMethodReturnTypes($this->state->classExtends[$class], $name) as $type) {
+			    $types[] = $type;
+		    }
+	    }
+	    return $types;
     }
 
     protected function findProperty($class, $name) {
@@ -633,44 +645,52 @@ class TypeReconstructor {
             }
             $types = [];
             $className = strtolower($userType);
-            if (!isset($this->state->classResolves[$className])) {
-                if (isset($this->state->internalTypeInfo->methods[$className])) {
-                    $types = [];
-                    foreach ($this->state->internalTypeInfo->methods[$className]['extends'] as $child) {
-                        if (isset($this->state->internalTypeInfo->methods[$child]['methods'][$name])) {
-                            $method = $this->state->internalTypeInfo->methods[$child]['methods'][$name];
-                            if ($method['return']) {
-                                $types[] = Type::fromDecl($method['return']);
-                            }
-                        }
-                    }
-                    if (!empty($types)) {
-                        return $types;
-                    }
-                }
-                return false;
-            }
-            foreach ($this->state->classResolves[$className] as $class) {
-                /** @var Op\Stmt\ClassMethod $method */
-                $method = $this->findMethod($class, $name);
-                if (!$method) {
-                    continue;
-                }
-                $doc = Type::extractTypeFromComment("return", $method->getAttribute('doccomment'));
-
-                $func = $method->getFunc();
-                if (!$func->returnType) {
-                    $types[] = $doc;
-                } else {
-                    $decl = Type::fromDecl($func->returnType->value);
-                    if ($this->state->resolver->resolves($doc, $decl)) {
-                        // doc is a subset
-                        $types[] = $doc;
-                    } else {
-                        $types[] = $decl;
-                    }
-                }
-            }
+	        if (isset($this->state->classResolvedBy[$className])) {
+	        	foreach ($this->state->classResolvedBy[$className] as $sclassname) {
+	        		foreach ($this->resolveMethodReturnTypes($sclassname, $name) as $type) {
+	        			$types[] = $type;
+			        }
+		        }
+	        }
+//
+//            if (!isset($this->state->classResolves[$className])) {
+//                if (isset($this->state->internalTypeInfo->methods[$className])) {
+//                    $types = [];
+//                    foreach ($this->state->internalTypeInfo->methods[$className]['extends'] as $child) {
+//                        if (isset($this->state->internalTypeInfo->methods[$child]['methods'][$name])) {
+//                            $method = $this->state->internalTypeInfo->methods[$child]['methods'][$name];
+//                            if ($method['return']) {
+//                                $types[] = Type::fromDecl($method['return']);
+//                            }
+//                        }
+//                    }
+//                    if (!empty($types)) {
+//                        return $types;
+//                    }
+//                }
+//                return false;
+//            }
+//            foreach ($this->state->classResolves[$className] as $class) {
+//                /** @var Op\Stmt\ClassMethod $method */
+//                $method = $this->resolveMethodReturnTypes($class, $name);
+//                if (!$method) {
+//                    continue;
+//                }
+//                $doc = Type::extractTypeFromComment("return", $method->getAttribute('doccomment'));
+//
+//                $func = $method->getFunc();
+//                if (!$func->returnType) {
+//                    $types[] = $doc;
+//                } else {
+//                    $decl = Type::fromDecl($func->returnType->value);
+//                    if ($this->state->resolver->resolves($doc, $decl)) {
+//                        // doc is a subset
+//                        $types[] = $doc;
+//                    } else {
+//                        $types[] = $decl;
+//                    }
+//                }
+//            }
             if (!empty($types)) {
                 return $types;
             }
