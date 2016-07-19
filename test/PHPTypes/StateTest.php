@@ -14,7 +14,7 @@ class StateTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	public function testClassHierarchyConstruction() {
-		$filename = __DIR__ . '/assets/stateTest.php';
+		$filename = __DIR__ . '/assets/stateTest.code';
 		$script = $this->parser->parse(file_get_contents($filename), $filename);
 		$state = new State([$script]);
 		$expectedClassResolves = [
