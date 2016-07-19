@@ -8501,24 +8501,16 @@ class InternalArgInfo {
         'zlib_get_coding_type'                                      => ['string'],
     ];
 
-    /**
-     * @var array
-     */
+    /** @var array */
     public $functions = [];
-    /**
-     * @var array
-     */
+    /** @var array */
     public $methods = [];
-
-	/**
-	 * @var string[]
-	 */
-	public $classResolves = [];
-
-	/**
-	 * @var string[]
-	 */
-	public $classResolvedBy = [];
+	/** @var string[] */
+	public $classExtends = [];	    // Index of parent classes of a class
+	/** @var string[][] */
+	public $classResolves = [];     // Index of all superclasses of a class
+	/** @var string[][] */
+	public $classResolvedBy = [];   // Index of all subclasses of a class
 
     public function __construct() {
         // load the typeinfo:
@@ -8538,8 +8530,7 @@ class InternalArgInfo {
     }
 
     /**
-     * @var array
-     *
+     * @param array $info
      * @return array
      */
     protected function parseInfo(array $info) {
@@ -8588,8 +8579,10 @@ class InternalArgInfo {
 			        ];
 		        }
 	        }
+
             do {
 	            $rclassname_lower = strtolower($rclass->name);
+	            $this->classExtends[$name_lower] = $rclassname_lower;
                 $this->classResolves[$name_lower][$rclassname_lower] = $rclassname_lower;
 	            $this->classResolvedBy[$rclassname_lower][$name_lower] = $name_lower;
                 foreach ($rclass->getInterfaceNames() as $iname) {

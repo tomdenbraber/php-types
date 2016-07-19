@@ -42,16 +42,19 @@ class State {
     public $interfaces;
     /** @var Op\Stmt\ClassMethod[] */
     public $methods;
-    /** @var Op\Stmt\ClassMethod[][] */
-    public $methodLookup;
+    /** @var Op\Stmt\ClassMethod[][][] */
+    public $methodLookup;           // Method definitions indexed by class name and method name - due to conditional inclusion there could be multiple definitions for the same method name
     /** @var Op\Stmt\Function_[] */
     public $functions;
     /** @var Op\Stmt\Function_[][] */
     public $functionLookup;
 
-    public $classResolves = [];
-
-    public $classResolvedBy = [];
+	/** @var array|string[][] */
+	public $classExtends = [];      // Index of all parent classes of a class - due to conditional inclusion there could be multiple parents for the same class name
+	/** @var array|string[][]  */
+    public $classResolves = [];     // Index of all superclasses of a class
+	/** @var array|string[][]  */
+    public $classResolvedBy = [];   // Index of all subclasses of a class
 
     /** @var Op\Expr\FuncCall[] */
     public $funcCalls = [];
@@ -72,6 +75,10 @@ class State {
         $this->scripts = $scripts;
         $this->resolver = new TypeResolver($this);
         $this->internalTypeInfo = new InternalArgInfo;
+	    foreach ($this->internalTypeInfo->classExtends as $classname => $pclassname) {
+		    $this->classExtends[$classname][$pclassname] = $pclassname;
+	    }
+	    $this->classExtends = $this->internalTypeInfo->classExtends;
 	    $this->classResolves = $this->internalTypeInfo->classResolves;
 	    $this->classResolvedBy = $this->internalTypeInfo->classResolvedBy;
         $this->load();
@@ -97,6 +104,7 @@ class State {
         $this->classes = $declarations->getClasses();
         $this->interfaces = $declarations->getInterfaces();
         $this->methods = $declarations->getMethods();
+	    $this->methodLookup = $this->buildMethodLookup($declarations->getMethods());
         $this->functions = $declarations->getFunctions();
         $this->functionLookup = $this->buildFunctionLookup($declarations->getFunctions());
         $this->funcCalls = $calls->getFuncCalls();
@@ -115,12 +123,23 @@ class State {
         $lookup = [];
         foreach ($functions as $function) {
             $name = strtolower($function->func->name);
-            if (!isset($lookup[$name])) {
-                $lookup[$name] = [];
-            }
             $lookup[$name][] = $function;
         }
         return $lookup;
+    }
+
+	/**
+	 * @param Op\Stmt\ClassMethod[] $methods
+	 * @return Op\Stmt\ClassMethod[][]
+	 */
+    private function buildMethodLookup(array $methods) {
+    	$lookup = [];
+	    foreach ($methods as $method) {
+	    	$classname = strtolower($method->getFunc()->class->value);
+	    	$name = strtolower($method->func->name);
+		    $lookup[$classname][$name][] = $method;
+	    }
+	    return $lookup;
     }
 
     private function computeTypeMatrix() {
@@ -144,6 +163,7 @@ class State {
 		    if ($class->extends !== null) {
 			    assert($class->extends instanceof Operand\Literal);
 			    $pname = strtolower($class->extends->value);
+			    $this->classExtends[$name][$pname] = $pname;
 			    $this->classResolves[$name][$pname] = $pname;
 			    $this->classResolvedBy[$pname][$name] = $name;
 		    }
