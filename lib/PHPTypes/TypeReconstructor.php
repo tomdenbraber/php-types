@@ -408,16 +408,15 @@ class TypeReconstructor {
 	private function resolveClassName($class, SplObjectStorage $resolved) {
 		if ($resolved->contains($class)) {
 			if ($resolved[$class]->type === Type::TYPE_STRING) {
-				if (!$class instanceof Operand\Literal) {
-					// variable classname methodname, for now just return object
-					return [Type::mixed()];
+				if ($class instanceof Operand\Literal) {
+					$userType = $class->value;
 				}
-				$userType = $class->value;
-			} else if ($resolved[$class]->type !== Type::TYPE_OBJECT) {
-				return false;
-			} else {
+			} else if ($resolved[$class]->type === Type::TYPE_OBJECT) {
 				$userType = $resolved[$class]->userType;
 			}
+		}
+
+		if (isset($userType)) {
 			return strtolower($userType);
 		}
 	}
@@ -426,7 +425,7 @@ class TypeReconstructor {
 		$types = [];
 		if (isset($this->state->classResolvedBy[$classname])) {
 			foreach ($this->state->classResolvedBy[$classname] as $sclassname) {
-				foreach ($this->resolveClassMethodCall($sclassname, $methodname) as $type) {
+				foreach ($this->resolveMethodCall($sclassname, $methodname) as $type) {
 					$types[] = $type;
 				}
 			}
@@ -434,7 +433,7 @@ class TypeReconstructor {
 		return $types;
 	}
 
-	private function resolveClassMethodCall($classname, $methodname) {
+	private function resolveMethodCall($classname, $methodname) {
 		$types = [];
 		if (isset($this->state->methodLookup[$classname][$methodname])) {
 			/** @var Op\Stmt\ClassMethod $classmethod */
@@ -455,7 +454,7 @@ class TypeReconstructor {
 			}
 		} else if (isset($this->state->classExtends[$classname])) {
 			foreach ($this->state->classExtends[$classname] as $pclassname) {
-				foreach ($this->resolveClassMethodCall($pclassname, $methodname) as $type) {
+				foreach ($this->resolveMethodCall($pclassname, $methodname) as $type) {
 					$types[] = $type;
 				}
 			}
