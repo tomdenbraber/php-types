@@ -8505,6 +8505,8 @@ class InternalArgInfo {
     public $functions = [];
     /** @var array */
     public $methods = [];
+	/** @var array  */
+	public $properties = [];
 	/** @var string[] */
 	public $classExtends = [];	    // Index of parent classes of a class
 	/** @var string[][] */
@@ -8577,6 +8579,13 @@ class InternalArgInfo {
 		                'return' => $return_type,
 				        'params' => $param_types
 			        ];
+		        }
+	        }
+
+	        foreach ($rclass->getProperties() as $rprop) {
+	        	$rpropname_lower = strtolower($rprop->getName());
+		        if (!isset($this->properties[$name_lower][$rpropname_lower])) {
+		        	$this->properties[$name_lower][$rpropname_lower] = [];
 		        }
 	        }
 

@@ -1,0 +1,79 @@
+<?php
+
+class A {
+	/** @var int $foo */
+	public $foo = 1;
+}
+
+class B extends A {
+	/** @var string $foo */
+	public $foo = 'foo';
+}
+
+class C extends B {
+	/** @var bool $foo */
+	public $foo = true;
+}
+
+class D {
+	public function bar(B $b) {
+		return $b->foo;
+	}
+}
+-----
+Block#1
+    Stmt_Class
+        name: LITERAL<string>('A')
+        stmts: Block#2
+    Stmt_Class
+        name: LITERAL<string>('B')
+        extends: LITERAL<string>('A')
+        stmts: Block#3
+    Stmt_Class
+        name: LITERAL<string>('C')
+        extends: LITERAL<string>('B')
+        stmts: Block#4
+    Stmt_Class
+        name: LITERAL<string>('D')
+        stmts: Block#5
+    Terminal_Return
+        expr: LITERAL<int>(1)
+
+Block#2
+    Stmt_Property
+        name: LITERAL<string>('foo')
+        defaultVar: LITERAL<int>(1)
+        defaultBlock: Block#6
+
+Block#3
+    Stmt_Property
+        name: LITERAL<string>('foo')
+        defaultVar: LITERAL<string>('foo')
+        defaultBlock: Block#7
+
+Block#4
+    Stmt_Property
+        name: LITERAL<string>('foo')
+        defaultVar: LITERAL<bool>(true)
+        defaultBlock: Block#8
+
+Block#5
+    Stmt_ClassMethod<bar>
+
+Block#6
+
+Block#7
+
+Block#8
+
+Function D::bar():
+Block#1
+    Expr_Param
+        name: LITERAL('b')
+        result: Var<B>#1<$b>
+    Expr_PropertyFetch
+        var: Var<B>#1<$b>
+        name: LITERAL<string>('foo')
+        result: Var<string|bool>#2
+    Terminal_Return
+        expr: Var<string|bool>#2

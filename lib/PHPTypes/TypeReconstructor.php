@@ -342,33 +342,6 @@ class TypeReconstructor {
         return $this->resolveInternalFunctionType($name);
     }
 
-    private function resolveFunctionsType($functions) {
-        assert(!empty($functions));
-        $result = [];
-        foreach ($functions as $function) {
-            $func = $function->func;
-            if ($func->returnType) {
-                $result[] = Type::fromDecl($func->returnType->value);
-            } else {
-                // Check doc comment
-                $result[] = Type::extractTypeFromComment("return", $function->getAttribute('doccomment'));
-            }
-        }
-        return $result;
-    }
-
-    private function resolveInternalFunctionType($name) {
-        if (isset($this->state->internalTypeInfo->functions[$name])) {
-            $type = $this->state->internalTypeInfo->functions[$name];
-            if (empty($type['return'])) {
-                return false;
-            }
-            return [Type::fromDecl($type['return'])];
-        }
-
-        return false;
-    }
-
 	protected function resolveOp_Expr_MethodCall(Operand $var, Op\Expr\MethodCall $op, SplObjectStorage $resolved) {
 		if ($op->name instanceof Operand\Literal) {
 			$name = strtolower($op->name->value);
@@ -405,63 +378,6 @@ class TypeReconstructor {
 		return false;
 	}
 
-	private function resolveClassName($class, SplObjectStorage $resolved) {
-		if ($resolved->contains($class)) {
-			if ($resolved[$class]->type === Type::TYPE_STRING) {
-				if ($class instanceof Operand\Literal) {
-					$userType = $class->value;
-				}
-			} else if ($resolved[$class]->type === Type::TYPE_OBJECT) {
-				$userType = $resolved[$class]->userType;
-			}
-		}
-
-		if (isset($userType)) {
-			return strtolower($userType);
-		}
-	}
-
-	private function resolvePolymorphicMethodCall($classname, $methodname) {
-		$types = [];
-		if (isset($this->state->classResolvedBy[$classname])) {
-			foreach ($this->state->classResolvedBy[$classname] as $sclassname) {
-				foreach ($this->resolveMethodCall($sclassname, $methodname) as $type) {
-					$types[] = $type;
-				}
-			}
-		}
-		return $types;
-	}
-
-	private function resolveMethodCall($classname, $methodname) {
-		$types = [];
-		if (isset($this->state->methodLookup[$classname][$methodname])) {
-			/** @var Op\Stmt\ClassMethod $classmethod */
-			foreach ($this->state->methodLookup[$classname][$methodname] as $classmethod) {
-				$doctype = Type::extractTypeFromComment("return", $classmethod->getAttribute('doccomment'));
-				$func = $classmethod->getFunc();
-				if ($func->returnType) {
-					$decltype = Type::fromDecl($func->returnType->value);
-					$types[] = $this->state->resolver->resolves($doctype, $decltype) ? $doctype : $decltype;
-				} else {
-					$types[] = $doctype;
-				}
-			}
-		} else if (isset($this->state->internalTypeInfo->methods[$classname][$methodname])) {
-			$method = $this->state->internalTypeInfo->methods[$classname][$methodname];
-			if (isset($method['return'])) {
-				$types[] = Type::fromDecl($method['return']);
-			}
-		} else if (isset($this->state->classExtends[$classname])) {
-			foreach ($this->state->classExtends[$classname] as $pclassname) {
-				foreach ($this->resolveMethodCall($pclassname, $methodname) as $type) {
-					$types[] = $type;
-				}
-			}
-		}
-		return $types;
-	}
-
     protected function resolveOp_Expr_New(Operand $var, Op\Expr\New_ $op, SplObjectStorage $resolved) {
         $type = $this->getClassType($op->class, $resolved);
         if ($type) {
@@ -489,25 +405,34 @@ class TypeReconstructor {
         return [$docType];
     }
 
-    protected function resolveOp_Expr_StaticPropertyFetch(Operand $var, Op $op, SplObjectStorage $resolved) {
-        return $this->resolveOp_Expr_PropertyFetch($var, $op, $resolved);
+    protected function resolveOp_Expr_PropertyFetch(Operand $var, Op\Expr\PropertyFetch $op, SplObjectStorage $resolved) {
+	    if ($op->name instanceof Operand\Literal) {
+		    $propname = strtolower($op->name->value);
+		    $classname = $this->resolveClassName($op->var, $resolved);
+		    if ($classname !== null) {
+			    $types = $this->resolvePolymorphicProperty($classname, $propname);
+			    if (!empty($types)) {
+				    return $types;
+			    }
+			    $types = $this->resolvePolymorphicMethodCall($classname, '__get');
+			    if (!empty($types)) {
+				    return $types;
+			    }
+		    }
+	    }
     }
 
-    protected function resolveOp_Expr_PropertyFetch(Operand $var, Op $op, SplObjectStorage $resolved) {
-        if (!$op->name instanceof Operand\Literal) {
-            // variable property fetch
-            return [Type::mixed()];
-        }
-        $propName = $op->name->value;
-        if ($op instanceof Op\Expr\StaticPropertyFetch) {
-            $objType = $this->getClassType($op->class, $resolved);
-        } else {
-            $objType = $this->getClassType($op->var, $resolved);
-        }
-        if ($objType) {
-            return $this->resolveProperty($objType, $propName);
-        }
-        return false;
+	protected function resolveOp_Expr_StaticPropertyFetch(Operand $var, Op\Expr\StaticPropertyFetch $op, SplObjectStorage $resolved) {
+		if ($op->name instanceof Operand\Literal) {
+			$propname = strtolower($op->name->value);
+			$classname = $this->resolveClassName($op->class, $resolved);
+			if ($classname !== null) {
+				$types = $this->resolvePolymorphicProperty($classname, $propname);
+				if (!empty($types)) {
+					return $types;
+				}
+			}
+		}
     }
 
     protected function resolveOp_Expr_Assertion(Operand $var, Op $op, SplObjectStorage $resolved) {
@@ -593,26 +518,132 @@ class TypeReconstructor {
         return false;
     }
 
-    protected function findProperty($class, $name) {
-        foreach ($class->stmts->children as $stmt) {
-            if ($stmt instanceof Op\Stmt\Property) {
-                if ($stmt->name->value === $name) {
-                    return $stmt;
-                }
-            }
-        }
-        return null;
-    }
+	protected function resolveAllProperties() {
+		foreach ($this->state->classes as $class) {
+			foreach ($class->stmts->children as $stmt) {
+				if ($stmt instanceof Op\Stmt\Property) {
+					$stmt->type = Type::extractTypeFromComment("var", $stmt->getAttribute('doccomment'));
+				}
+			}
+		}
+	}
 
-    protected function resolveAllProperties() {
-        foreach ($this->state->classes as $class) {
-            foreach ($class->stmts->children as $stmt) {
-                if ($stmt instanceof Op\Stmt\Property) {
-                    $stmt->type = Type::extractTypeFromComment("var", $stmt->getAttribute('doccomment'));
-                }
-            }
-        }
-    }
+	private function resolveFunctionsType($functions) {
+		assert(!empty($functions));
+		$result = [];
+		foreach ($functions as $function) {
+			$func = $function->func;
+			if ($func->returnType) {
+				$result[] = Type::fromDecl($func->returnType->value);
+			} else {
+				// Check doc comment
+				$result[] = Type::extractTypeFromComment("return", $function->getAttribute('doccomment'));
+			}
+		}
+		return $result;
+	}
+
+	private function resolveInternalFunctionType($name) {
+		if (isset($this->state->internalTypeInfo->functions[$name])) {
+			$type = $this->state->internalTypeInfo->functions[$name];
+			if (empty($type['return'])) {
+				return false;
+			}
+			return [Type::fromDecl($type['return'])];
+		}
+
+		return false;
+	}
+
+	private function resolveClassName($class, SplObjectStorage $resolved) {
+		if ($resolved->contains($class)) {
+			if ($resolved[$class]->type === Type::TYPE_STRING) {
+				if ($class instanceof Operand\Literal) {
+					$userType = $class->value;
+				}
+			} else if ($resolved[$class]->type === Type::TYPE_OBJECT) {
+				$userType = $resolved[$class]->userType;
+			}
+		}
+
+		if (isset($userType)) {
+			return strtolower($userType);
+		}
+	}
+
+	private function resolvePolymorphicMethodCall($classname, $methodname) {
+		$types = [];
+		if (isset($this->state->classResolvedBy[$classname])) {
+			foreach ($this->state->classResolvedBy[$classname] as $sclassname) {
+				foreach ($this->resolveMethodCall($sclassname, $methodname) as $type) {
+					$types[] = $type;
+				}
+			}
+		}
+		return $types;
+	}
+
+	private function resolveMethodCall($classname, $methodname) {
+		$types = [];
+		if (isset($this->state->methodLookup[$classname][$methodname])) {
+			/** @var Op\Stmt\ClassMethod $classmethod */
+			foreach ($this->state->methodLookup[$classname][$methodname] as $classmethod) {
+				$doctype = Type::extractTypeFromComment("return", $classmethod->getAttribute('doccomment'));
+				$func = $classmethod->getFunc();
+				if ($func->returnType) {
+					$decltype = Type::fromDecl($func->returnType->value);
+					$types[] = $this->state->resolver->resolves($doctype, $decltype) ? $doctype : $decltype;
+				} else {
+					$types[] = $doctype;
+				}
+			}
+		} else if (isset($this->state->internalTypeInfo->methods[$classname][$methodname])) {
+			$method = $this->state->internalTypeInfo->methods[$classname][$methodname];
+			if (isset($method['return'])) {
+				$types[] = Type::fromDecl($method['return']);
+			}
+		} else if (isset($this->state->classExtends[$classname])) {
+			foreach ($this->state->classExtends[$classname] as $pclassname) {
+				foreach ($this->resolveMethodCall($pclassname, $methodname) as $type) {
+					$types[] = $type;
+				}
+			}
+		}
+		return $types;
+	}
+
+	private function resolvePolymorphicProperty($classname, $propertyname) {
+		$types = [];
+		if (isset($this->state->classResolvedBy[$classname])) {
+			foreach ($this->state->classResolvedBy[$classname] as $sclassname) {
+				foreach ($this->resolveProperty($sclassname, $propertyname) as $type) {
+					$types[] = $type;
+				}
+			}
+		}
+		return $types;
+	}
+
+	/**
+	 * @param string $classname
+	 * @param string $propname
+	 * @return Type[]
+	 */
+	private function resolveProperty($classname, $propname) {
+		$types = [];
+		if (isset($this->state->propertyLookup[$classname][$propname])) {
+			/** @var Op\Stmt\Property $classprop */
+			foreach ($this->state->propertyLookup[$classname][$propname] as $classprop) {
+				if (isset($classprop->type)) {
+					$types[] = $classprop->type;
+				}
+			}
+		}
+		if (isset($this->state->internalTypeInfo->properties[$classname][$propname]['type'])) {
+			return $this->state->internalTypeInfo->properties[$classname][$propname]['type'];
+		}
+		return $types;
+	}
 
     protected function resolveClassConstant($class, $op, SplObjectStorage $resolved) {
         $try = $class . '::' . $op->name->value;
@@ -650,40 +681,6 @@ class TypeReconstructor {
             return false;
         }
         return $types;
-    }
-
-    /**
-     * @param Type   $objType
-     * @param string $propName
-     *
-     * @return Type[]|false
-     */
-    private function resolveProperty(Type $objType, $propName) {
-        if ($objType->type === Type::TYPE_OBJECT) {
-            $types = [];
-            $ut = strtolower($objType->userType);
-            if (!isset($this->state->classResolves[$ut])) {
-                // unknown type
-                return false;
-            }
-            foreach ($this->state->classResolves[$ut] as $class) {
-                // Lookup property on classname
-                $property = $this->findProperty($class, $propName);
-                if ($property) {
-                    if ($property->type) {
-                        $types[] = $property->type;
-                    } else {
-                        echo "Property found to be untyped: $propName\n";
-                        // untyped property
-                        return false;
-                    }
-                }
-            }
-            if ($types) {
-                return $types;
-            }
-        }
-        return false;
     }
 
     protected function getClassType(Operand $var, SplObjectStorage $resolved) {

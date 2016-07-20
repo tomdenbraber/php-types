@@ -44,6 +44,8 @@ class State {
     public $methods;
     /** @var Op\Stmt\ClassMethod[][][] */
     public $methodLookup;           // Method definitions indexed by class name and method name - due to conditional inclusion there could be multiple definitions for the same method name
+	/** @var  Op\Stmt\Property[][][] */
+	public $propertyLookup;         // Property definitions indexed by class name and property name - due to conditional inclusion there could be multiple definitions for the same property name
     /** @var Op\Stmt\Function_[] */
     public $functions;
     /** @var Op\Stmt\Function_[][] */
@@ -105,6 +107,7 @@ class State {
         $this->interfaces = $declarations->getInterfaces();
         $this->methods = $declarations->getMethods();
 	    $this->methodLookup = $this->buildMethodLookup($declarations->getMethods());
+	    $this->propertyLookup = $this->buildPropertyLookup($this->classes);
         $this->functions = $declarations->getFunctions();
         $this->functionLookup = $this->buildFunctionLookup($declarations->getFunctions());
         $this->funcCalls = $calls->getFuncCalls();
@@ -138,6 +141,24 @@ class State {
 	    	$classname = strtolower($method->getFunc()->class->value);
 	    	$name = strtolower($method->func->name);
 		    $lookup[$classname][$name][] = $method;
+	    }
+	    return $lookup;
+    }
+
+    /**
+     * @param Op\Stmt\Class_[] $classes
+     * @return Op\Stmt\Property[]
+     */
+    private function buildPropertyLookup(array $classes) {
+    	$lookup = [];
+	    foreach ($classes as $class) {
+	    	$classname = strtolower($class->name->value);
+		    foreach ($class->stmts->children as $op) {
+		    	if ($op instanceof Op\Stmt\Property) {
+				    $name = strtolower($op->name->value);
+				    $lookup[$classname][$name][] = $op;
+			    }
+		    }
 	    }
 	    return $lookup;
     }
