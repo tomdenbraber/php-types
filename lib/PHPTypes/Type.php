@@ -53,7 +53,11 @@ class Type {
 				throw new \RuntimeException("Subtypes must implement Type");
 			}
 		}
-		if ($type !== self::TYPE_OBJECT && $userType !== null) {
+		if ($type === self::TYPE_OBJECT) {
+			if ($userType !== null && is_string($userType) === false) {
+				throw new \LogicException("Expected user type to be null or string");
+			}
+		} else if ($userType !== null) {
 			throw new \LogicException("Only objects can have a user type");
 		}
 		switch ($type) {
