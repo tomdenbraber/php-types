@@ -74,6 +74,6 @@ Block#1
     Expr_PropertyFetch
         var: Var<B>#1<$b>
         name: LITERAL<string>('foo')
-        result: Var<string|bool>#2
+        result: Var<bool|string>#2
     Terminal_Return
-        expr: Var<string|bool>#2
+        expr: Var<bool|string>#2

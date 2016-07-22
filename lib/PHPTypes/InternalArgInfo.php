@@ -8507,6 +8507,9 @@ class InternalArgInfo {
     public $methods = [];
 	/** @var array  */
 	public $properties = [];
+	/** @var array  */
+	public $classConstants = [];
+
 	/** @var string[] */
 	public $classExtends = [];	    // Index of parent classes of a class
 	/** @var string[][] */
@@ -8562,16 +8565,16 @@ class InternalArgInfo {
 	        	$rmethodname_lower = strtolower($rmethod->getName());
 	        	if (!isset($this->methods[$name_lower][$rmethodname_lower])) {
 	        		if (version_compare(phpversion(), '7.0.0', '>')) {
-				        $return_type = $rmethod->hasReturnType() ? Type::fromDecl((string) $rmethod->getReturnType()) : Type::mixed();
+				        $return_type = $rmethod->hasReturnType() ? (string) $rmethod->getReturnType() : '';
 				        $param_types = [];
 				        foreach ($rmethod->getParameters() as $rparam) {
-					        $param_types[] = ['name' => $rparam->getName(), 'type' => $rparam->hasType() ? Type::fromDecl((string) $rparam->getType()) : Type::mixed()];
+					        $param_types[] = ['name' => $rparam->getName(), 'type' => $rparam->hasType() ? (string) $rparam->getType() : ''];
 				        }
 			        } else {
-				        $return_type = Type::mixed();
+				        $return_type = '';
 				        $param_types = [];
 				        foreach ($rmethod->getParameters() as $rparam) {
-					        $param_types[] = ['name' => $rparam->getName(), 'type' => Type::mixed()];
+					        $param_types[] = ['name' => $rparam->getName(), 'type' => ''];
 				        }
 			        }
 			        
@@ -8585,13 +8588,18 @@ class InternalArgInfo {
 	        foreach ($rclass->getProperties() as $rprop) {
 	        	$rpropname_lower = strtolower($rprop->getName());
 		        if (!isset($this->properties[$name_lower][$rpropname_lower])) {
-		        	$this->properties[$name_lower][$rpropname_lower] = [];
+		        	$this->properties[$name_lower][$rpropname_lower] = '';  // dont know types of these, but register that they exist
 		        }
 	        }
 
+	        $this->classConstants[$name_lower] = $rclass->getConstants();
+
             do {
 	            $rclassname_lower = strtolower($rclass->name);
-	            $this->classExtends[$name_lower] = $rclassname_lower;
+	            $pclass = $rclass->getParentClass();
+	            if ($pclass !== false) {
+		            $this->classExtends[$rclassname_lower] = strtolower($pclass->name);
+	            }
                 $this->classResolves[$name_lower][$rclassname_lower] = $rclassname_lower;
 	            $this->classResolvedBy[$rclassname_lower][$name_lower] = $name_lower;
                 foreach ($rclass->getInterfaceNames() as $iname) {
@@ -8599,7 +8607,7 @@ class InternalArgInfo {
 	                $this->classResolves[$name_lower][$iname_lower] = $iname_lower;
 	                $this->classResolvedBy[$iname_lower][$name_lower] = $name_lower;
                 }
-            } while ($rclass = $rclass->getParentClass());
+            } while ($rclass = $pclass);
         }
     }
 }

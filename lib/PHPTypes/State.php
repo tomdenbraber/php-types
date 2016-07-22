@@ -38,25 +38,27 @@ class State {
     public $traits;
     /** @var Op\Stmt\Class_[] */
     public $classes;
+	/** @var Op\Stmt\Class_[][] */
+	public $classLookup = [];
     /** @var Op\Stmt\Interface_[] */
     public $interfaces;
     /** @var Op\Stmt\ClassMethod[] */
     public $methods;
-    /** @var Op\Stmt\ClassMethod[][][] */
-    public $methodLookup;           // Method definitions indexed by class name and method name - due to conditional inclusion there could be multiple definitions for the same method name
-	/** @var  Op\Stmt\Property[][][] */
-	public $propertyLookup;         // Property definitions indexed by class name and property name - due to conditional inclusion there could be multiple definitions for the same property name
+    /** @var \SplObjectStorage|Op\Stmt\ClassMethod[][][] */
+    public $methodLookup;               // Method definitions indexed by class name and method name - due to conditional inclusion there could be multiple definitions for the same method name
+	/** @var \SplObjectStorage|Op\Stmt\Property[][][] */
+	public $propertyLookup;             // Property definitions indexed by class name and property name - due to conditional inclusion there could be multiple definitions for the same property name
+	/** @var \SplObjectStorage|Op\Terminal\Const_[][][] */
+	public $classConstantLookup;        // Class constant definitions indexed by class name and constant name - due to conditional inclusion there could be multiple definitions for the same class constant name
     /** @var Op\Stmt\Function_[] */
     public $functions;
     /** @var Op\Stmt\Function_[][] */
     public $functionLookup;
 
-	/** @var array|string[][] */
-	public $classExtends = [];      // Index of all parent classes of a class - due to conditional inclusion there could be multiple parents for the same class name
 	/** @var array|string[][]  */
-    public $classResolves = [];     // Index of all superclasses of a class
+    public $classResolves = [];         // Index of all superclasses of a class
 	/** @var array|string[][]  */
-    public $classResolvedBy = [];   // Index of all subclasses of a class
+    public $classResolvedBy = [];       // Index of all subclasses of a class
 
     /** @var Op\Expr\FuncCall[] */
     public $funcCalls = [];
@@ -77,10 +79,9 @@ class State {
         $this->scripts = $scripts;
         $this->resolver = new TypeResolver($this);
         $this->internalTypeInfo = new InternalArgInfo;
-	    foreach ($this->internalTypeInfo->classExtends as $classname => $pclassname) {
-		    $this->classExtends[$classname][$pclassname] = $pclassname;
-	    }
-	    $this->classExtends = $this->internalTypeInfo->classExtends;
+	    $this->methodLookup = new SplObjectStorage();
+	    $this->propertyLookup = new SplObjectStorage();
+	    $this->classConstantLookup = new SplObjectStorage();
 	    $this->classResolves = $this->internalTypeInfo->classResolves;
 	    $this->classResolvedBy = $this->internalTypeInfo->classResolvedBy;
         $this->load();
@@ -106,61 +107,53 @@ class State {
         $this->classes = $declarations->getClasses();
         $this->interfaces = $declarations->getInterfaces();
         $this->methods = $declarations->getMethods();
-	    $this->methodLookup = $this->buildMethodLookup($declarations->getMethods());
-	    $this->propertyLookup = $this->buildPropertyLookup($this->classes);
         $this->functions = $declarations->getFunctions();
-        $this->functionLookup = $this->buildFunctionLookup($declarations->getFunctions());
+
+        $this->buildFunctionLookup($this->functions);
+	    $this->buildClassLookups($this->classes);
+
         $this->funcCalls = $calls->getFuncCalls();
         $this->nsFuncCalls = $calls->getNsFuncCalls();
         $this->methodCalls = $calls->getMethodCalls();
         $this->staticCalls = $calls->getStaticCalls();
         $this->newCalls = $calls->getNewCalls();
+
+	    $this->buildClassLookups($this->classes);
         $this->computeTypeMatrix();
     }
 
     /**
      * @param Op\Stmt\Function_[] $functions
-     * @return Op\Stmt\Function_[][]
      */
     private function buildFunctionLookup(array $functions) {
-        $lookup = [];
         foreach ($functions as $function) {
             $name = strtolower($function->func->name);
-            $lookup[$name][] = $function;
+            $this->functionLookup[$name][] = $function;
         }
-        return $lookup;
     }
 
 	/**
-	 * @param Op\Stmt\ClassMethod[] $methods
-	 * @return Op\Stmt\ClassMethod[][]
+	 * @param Op\Stmt\Class_[] $classes
 	 */
-    private function buildMethodLookup(array $methods) {
-    	$lookup = [];
-	    foreach ($methods as $method) {
-	    	$classname = strtolower($method->getFunc()->class->value);
-	    	$name = strtolower($method->func->name);
-		    $lookup[$classname][$name][] = $method;
-	    }
-	    return $lookup;
-    }
-
-    /**
-     * @param Op\Stmt\Class_[] $classes
-     * @return Op\Stmt\Property[]
-     */
-    private function buildPropertyLookup(array $classes) {
-    	$lookup = [];
+    private function buildClassLookups(array $classes) {
 	    foreach ($classes as $class) {
-	    	$classname = strtolower($class->name->value);
+	    	$methods = [];
+		    $properties = [];
+		    $constants = [];
 		    foreach ($class->stmts->children as $op) {
-		    	if ($op instanceof Op\Stmt\Property) {
-				    $name = strtolower($op->name->value);
-				    $lookup[$classname][$name][] = $op;
+		    	if ($op instanceof Op\Stmt\ClassMethod) {
+		    		$methods[strtolower($op->getFunc()->name)][] = $op;
+			    } else if ($op instanceof Op\Stmt\Property) {
+					$properties[strtolower($op->name->value)][] = $op;
+			    } else if ($op instanceof Op\Terminal\Const_) {
+				    $constants[strtolower($op->name->value)][] = $op;
 			    }
 		    }
+		    $this->classLookup[strtolower($class->name->value)][] = $class;
+		    $this->methodLookup[$class] = $methods;
+		    $this->propertyLookup[$class] = $properties;
+		    $this->classConstantLookup[$class] = $constants;
 	    }
-	    return $lookup;
     }
 
     private function computeTypeMatrix() {

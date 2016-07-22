@@ -64,36 +64,6 @@ class TypeReconstructor {
         }
     }
 
-    /**
-     * @param Type[] $types
-     *
-     * @return Type
-     */
-    protected function computeMergedType(array $types) {
-        if (count($types) === 1) {
-            return $types[0];
-        }
-        $same = null;
-        foreach ($types as $key => $type) {
-            if (!$type instanceof Type) {
-                var_dump($types);
-                throw new \RuntimeException("Invalid type found");
-            }
-            if (is_null($same)) {
-                $same = $type;
-            } elseif ($same && !$same->equals($type)) {
-                $same = false;
-            }
-            if ($type->type === Type::TYPE_UNKNOWN) {
-                return false;
-            }
-        }
-        if ($same) {
-            return $same;
-        }
-        return (new Type(Type::TYPE_UNION, $types))->simplify();
-    }
-
     protected function resolveVar(Operand $var, SplObjectStorage $resolved) {
         $types = [];
         foreach ($var->ops as $prev) {
@@ -113,7 +83,7 @@ class TypeReconstructor {
         if (empty($types)) {
             return false;
         }
-        return $this->computeMergedType($types);
+        return Type::union($types);
     }
 
     protected function resolveVarOp(Operand $var, Op $op, SplObjectStorage $resolved) {
@@ -174,7 +144,7 @@ class TypeReconstructor {
                         case [Type::TYPE_DOUBLE, TYPE::TYPE_DOUBLE]:
                             return [Type::float()];
                         case [Type::TYPE_ARRAY, Type::TYPE_ARRAY]:
-                            $sub = $this->computeMergedType(array_merge($resolved[$op->left]->subTypes, $resolved[$op->right]->subTypes));
+                            $sub = Type::union(array_merge($resolved[$op->left]->subTypes, $resolved[$op->right]->subTypes));
                             if ($sub) {
                                 return [new Type(Type::TYPE_ARRAY, [$sub])];
                             }
@@ -248,7 +218,7 @@ class TypeReconstructor {
         if (empty($types)) {
             return [new Type(Type::TYPE_ARRAY)];
         }
-        $r = $this->computeMergedType($types);
+        $r = Type::union($types);
         if ($r) {
             return [new Type(Type::TYPE_ARRAY, [$r])];
         }
@@ -420,6 +390,7 @@ class TypeReconstructor {
 			    }
 		    }
 	    }
+	    return false;
     }
 
 	protected function resolveOp_Expr_StaticPropertyFetch(Operand $var, Op\Expr\StaticPropertyFetch $op, SplObjectStorage $resolved) {
@@ -433,6 +404,7 @@ class TypeReconstructor {
 				}
 			}
 		}
+		return false;
     }
 
     protected function resolveOp_Expr_Assertion(Operand $var, Op $op, SplObjectStorage $resolved) {
@@ -469,19 +441,15 @@ class TypeReconstructor {
     }
 
     protected function resolveOp_Expr_ClassConstFetch(Operand $var, Op\Expr\ClassConstFetch $op, SplObjectStorage $resolved) {
-        $classes = [];
-        if ($op->class instanceof Operand\Literal) {
-            $class = strtolower($op->class->value);
-            return $this->resolveClassConstant($class, $op, $resolved);
-        } elseif ($resolved->contains($op->class)) {
-            $type = $resolved[$op->class];
-            if ($type->type !== Type::TYPE_OBJECT || empty($type->userType)) {
-                // give up
-                return false;
-            }
-            return $this->resolveClassConstant(strtolower($type->userType), $op, $resolved);
-        }
-        return false;
+    	$classname = $this->resolveClassName($op->class, $resolved);
+	    if ($classname !== null) {
+	    	assert($op->name instanceof Operand\Literal);
+		    $constname = strtolower($op->name->value);
+		    $types = $this->resolvePolymorphicClassConstant($classname, $constname);
+		    if (!empty($types)) {
+		    	return $types;
+		    }
+	    }
     }
 
     protected function resolveOp_Terminal_StaticVar(Operand $var, Op\Terminal\StaticVar $op, SplObjectStorage $resolved) {
@@ -507,7 +475,7 @@ class TypeReconstructor {
         if (empty($types)) {
             return false;
         }
-        $type = $this->computeMergedType($types);
+        $type = Type::union($types);
         if ($type) {
             if ($resolveFully) {
                 return [$type];
@@ -585,38 +553,66 @@ class TypeReconstructor {
 
 	private function resolveMethodCall($classname, $methodname) {
 		$types = [];
-		if (isset($this->state->methodLookup[$classname][$methodname])) {
-			/** @var Op\Stmt\ClassMethod $classmethod */
-			foreach ($this->state->methodLookup[$classname][$methodname] as $classmethod) {
-				$doctype = Type::extractTypeFromComment("return", $classmethod->getAttribute('doccomment'));
-				$func = $classmethod->getFunc();
-				if ($func->returnType) {
-					$decltype = Type::fromDecl($func->returnType->value);
-					$types[] = $this->state->resolver->resolves($doctype, $decltype) ? $doctype : $decltype;
-				} else {
-					$types[] = $doctype;
+		if (isset($this->state->classLookup[$classname])) {
+			/** @var Op\Stmt\Class_ $class */
+			foreach ($this->state->classLookup[$classname] as $class) {
+				if (isset($this->state->methodLookup[$class][$methodname])) {
+					/** @var Op\Stmt\ClassMethod $method */
+					foreach ($this->state->methodLookup[$class][$methodname] as $method) {
+						$doctype = Type::extractTypeFromComment("return", $method->getAttribute('doccomment'));
+						$func = $method->getFunc();
+						if ($func->returnType) {
+							$decltype = Type::fromDecl($func->returnType->value);
+							$types[] = $this->state->resolver->resolves($doctype, $decltype) ? $doctype : $decltype;
+						} else {
+							$types[] = $doctype;
+						}
+					}
+				} else if ($class->extends !== null) {
+					assert($class->extends instanceof Operand\Literal);
+					foreach ($this->resolveMethodCall(strtolower($class->extends->value), $methodname) as $type) {
+						$types[] = $type;
+					}
 				}
 			}
-		} else if (isset($this->state->internalTypeInfo->methods[$classname][$methodname])) {
-			$method = $this->state->internalTypeInfo->methods[$classname][$methodname];
-			if (isset($method['return'])) {
-				$types[] = Type::fromDecl($method['return']);
-			}
-		} else if (isset($this->state->classExtends[$classname])) {
-			foreach ($this->state->classExtends[$classname] as $pclassname) {
-				foreach ($this->resolveMethodCall($pclassname, $methodname) as $type) {
-					$types[] = $type;
-				}
-			}
+		}
+
+		// try resolve in builtins - we do this as well to support monkey patching
+		$type = $this->resolveBuiltinMethodCall($classname, $methodname);
+		if ($type !== null) {
+			$types[] = $type;
 		}
 		return $types;
 	}
 
-	private function resolvePolymorphicProperty($classname, $propertyname) {
+	/**
+	 * @param string $classname
+	 * @param string $methodname
+	 * @return Type
+	 */
+	private function resolveBuiltinMethodCall($classname, $methodname) {
+		$type = null;
+		if (isset($this->state->internalTypeInfo->methods[$classname][$methodname])) {
+			$methodInfo = $this->state->internalTypeInfo->methods[$classname][$methodname];
+			if (isset($methodInfo['return'])) {
+				$type = Type::fromDecl($methodInfo['return']);
+			}
+		} else if (isset($this->state->internalTypeInfo->classExtends[$classname])) {
+			$type = $this->resolveMethodCall($this->state->internalTypeInfo->classExtends[$classname], $methodname);
+		}
+		return $type;
+	}
+
+	/**
+	 * @param string $classname
+	 * @param string $propname
+	 * @return Type[]
+	 */
+	private function resolvePolymorphicProperty($classname, $propname) {
 		$types = [];
 		if (isset($this->state->classResolvedBy[$classname])) {
 			foreach ($this->state->classResolvedBy[$classname] as $sclassname) {
-				foreach ($this->resolveProperty($sclassname, $propertyname) as $type) {
+				foreach ($this->resolveProperty($sclassname, $propname) as $type) {
 					$types[] = $type;
 				}
 			}
@@ -631,57 +627,105 @@ class TypeReconstructor {
 	 */
 	private function resolveProperty($classname, $propname) {
 		$types = [];
-		if (isset($this->state->propertyLookup[$classname][$propname])) {
-			/** @var Op\Stmt\Property $classprop */
-			foreach ($this->state->propertyLookup[$classname][$propname] as $classprop) {
-				if (isset($classprop->type)) {
-					$types[] = $classprop->type;
+		if (isset($this->state->classLookup[$classname])) {
+			foreach ($this->state->classLookup[$classname] as $class) {
+				if (isset($this->state->propertyLookup[$class][$propname])) {
+					foreach ($this->state->propertyLookup[$class][$propname] as $prop) {
+						if (isset($prop->type)) {
+							$types[] = $prop->type;
+						}
+					}
+				} else if ($class->extends !== null) {
+					foreach ($this->resolveProperty(strtolower($class->extends), $propname) as $type) {
+						$types[] = $type;
+					}
 				}
 			}
 		}
-		if (isset($this->state->internalTypeInfo->properties[$classname][$propname]['type'])) {
-			return $this->state->internalTypeInfo->properties[$classname][$propname]['type'];
+
+		// try resolve in builtins - we do this as well to support monkey patching
+		$type = $this->resolveBuiltinProperty($classname, $propname);
+		if ($type !== null) {
+			$types[] = $type;
 		}
 		return $types;
 	}
 
-    protected function resolveClassConstant($class, $op, SplObjectStorage $resolved) {
-        $try = $class . '::' . $op->name->value;
-        if (isset($this->state->constants[$try])) {
-            $types = [];
-            foreach ($this->state->constants[$try] as $const) {
-                if ($resolved->contains($const->value)) {
-                    $types[] = $resolved[$const->value];
-                } else {
-                    // Not every
-                    return false;
-                }
-            }
-            return $types;
-        }
-        if (!isset($this->state->classResolvedBy[$class])) {
-            // can't find classes
-            return false;
-        }
-        $types = [];
-        foreach ($this->state->classResolves[$class] as $name => $_) {
-            $try = $name . '::' . $op->name->value;
-            if (isset($this->state->constants[$try])) {
-                foreach ($this->state->constants[$try] as $const) {
-                    if ($resolved->contains($const->value)) {
-                        $types[] = $resolved[$const->value];
-                    } else {
-                        // Not every is resolved yet
-                        return false;
-                    }
-                }
-            }
-        }
-        if (empty($types)) {
-            return false;
-        }
-        return $types;
-    }
+	/**
+	 * @param string $classname
+	 * @param string $propname
+	 * @return Type
+	 */
+	private function resolveBuiltinProperty($classname, $propname) {
+		$type = null;
+		if (isset($this->state->internalTypeInfo->properties[$classname][$propname])) {
+			$type = Type::fromDecl($this->state->internalTypeInfo->properties[$classname][$propname]);
+		} else if (isset($this->state->internalTypeInfo->classExtends[$classname])) {
+			$type = $this->resolveBuiltinProperty($this->state->internalTypeInfo->classExtends[$classname], $propname);
+		}
+		return $type;
+	}
+
+	/**
+	 * @param string $classname
+	 * @param string $constname
+	 * @return Type[]
+	 */
+	private function resolvePolymorphicClassConstant($classname, $constname) {
+		$types = [];
+		if (isset($this->state->classResolvedBy[$classname])) {
+			foreach ($this->state->classResolvedBy[$classname] as $sclassname) {
+				foreach ($this->resolveClassConstant($sclassname, $constname) as $type) {
+					$types[] = $type;
+				}
+			}
+		}
+		return $types;
+	}
+
+	/**
+	 * @param string $classname
+	 * @param string $constname
+	 * @return Type[]
+	 */
+	private function resolveClassConstant($classname, $constname) {
+		$types = [];
+		if (isset($this->state->classLookup[$classname])) {
+			foreach ($this->state->classLookup[$classname] as $class) {
+				if (isset($this->state->classConstantLookup[$class][$constname])) {
+					foreach ($this->state->classConstantLookup[$class][$constname] as $classconst) {
+						$types[] = $classconst->value->type;
+					}
+				} else if ($class->extends !== null) {
+					foreach ($this->resolveClassConstant(strtolower($class->extends->value), $constname) as $type) {
+						$types[] = $type;
+					}
+				}
+			}
+		}
+
+		// try resolve in builtins - we do this as well to support monkey patching
+		$type = $this->resolveBuiltinClassConstant($classname, $constname);
+		if ($type !== null) {
+			$types[] = $type;
+		}
+		return $types;
+	}
+
+	/**
+	 * @param string $classname
+	 * @param string $constname
+	 * @return Type
+	 */
+	private function resolveBuiltinClassConstant($classname, $constname) {
+		$type = null;
+		if (isset($this->state->internalTypeInfo->classConstants[$classname][$constname])) {
+			$type = Type::fromDecl($this->state->internalTypeInfo->classConstants[$classname][$constname]);
+		} else if (isset($this->state->internalTypeInfo->classExtends[$classname])) {
+			$type = $this->resolveBuiltinClassConstant($this->state->internalTypeInfo->classExtends[$classname], $constname);
+		}
+		return $type;
+	}
 
     protected function getClassType(Operand $var, SplObjectStorage $resolved) {
         if ($var instanceof Operand\Literal) {
