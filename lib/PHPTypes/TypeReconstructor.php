@@ -636,7 +636,7 @@ class TypeReconstructor {
 						}
 					}
 				} else if ($class->extends !== null) {
-					foreach ($this->resolveProperty(strtolower($class->extends), $propname) as $type) {
+					foreach ($this->resolveProperty(strtolower($class->extends->value), $propname) as $type) {
 						$types[] = $type;
 					}
 				}
