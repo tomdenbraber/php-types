@@ -48,52 +48,66 @@ class Type {
 	 * @param ?string $userType
 	 */
 	public function __construct($type, array $subTypes = [], $userType = null) {
-		$this->type = $type;
-		if ($type === self::TYPE_OBJECT) {
-			$this->userType = (string) $userType;
-		} elseif (isset(self::$hasSubtypes[$type])) {
-			$this->subTypes = $subTypes;
-			foreach ($subTypes as $sub) {
-				if (!$sub instanceof Type) {
-					throw new \RuntimeException("Sub types must implement Type");
-				}
+		foreach ($subTypes as $sub) {
+			if (!$sub instanceof Type) {
+				throw new \RuntimeException("Subtypes must implement Type");
 			}
 		}
+		if ($type !== self::TYPE_OBJECT && $userType !== null) {
+			throw new \LogicException("Only objects can have a user type");
+		}
+		switch ($type) {
+			case self::TYPE_UNION:
+			case self::TYPE_INTERSECTION:
+				if (count($subTypes) < 2) {
+					throw new \LogicException("Compound types must combine at least 2 subtypes");
+				}
+				break;
+			case self::TYPE_ARRAY:
+				if (count($subTypes) > 1) {
+					throw new \LogicException("Array type must have at most 1 subtype");
+				}
+				break;
+			default:
+				if (!empty($subTypes)) {
+					throw new \LogicException("Type $type cannot have subtypes");
+				}
+		}
+		$this->type = $type;
+		$this->subTypes = $subTypes;
+		$this->userType = $userType;
 	}
 
 	/**
 	 * @return string
 	 */
 	public function __toString() {
-		static $ctr = 0;
-		$ctr++;
 		if ($this->type === Type::TYPE_UNKNOWN) {
-			$ctr--;
 			return "unknown";
 		}
 		$primitives = self::getPrimitives();
 		if (isset($primitives[$this->type])) {
-			$ctr--;
-			if ($this->type === Type::TYPE_OBJECT && $this->userType) {
+			if ($this->type === Type::TYPE_OBJECT && $this->userType !== null) {
 				return $this->userType;
 			} elseif ($this->type === Type::TYPE_ARRAY && $this->subTypes) {
 				return $this->subTypes[0] . '[]';
 			}
 			return $primitives[$this->type];
 		}
-		$value = '';
+
+		$subTypeStrings = [];
+		foreach ($this->subTypes as $subType) {
+			$subTypeString = (string) $subType;
+			$subTypeStrings[] = count($subType->subTypes) >= 2  ? '(' . $subTypeString . ')' : $subTypeString;
+		}
+
 		if ($this->type === Type::TYPE_UNION) {
-			$value = implode('|', $this->subTypes);
+			return implode('|', $subTypeStrings);
 		} elseif ($this->type === Type::TYPE_INTERSECTION) {
-			$value = implode('&', $this->subTypes);
-		} else {
-			throw new \RuntimeException("Assertion failure: unknown type {$this->type}");
+			return implode('&', $subTypeStrings);
 		}
-		$ctr--;
-		if ($ctr > 0) {
-			return '(' . $value . ')';
-		}
-		return $value;
+
+		throw new \RuntimeException("Assertion failure: unknown type {$this->type}");
 	}
 
 	public function hasSubtypes() {
@@ -179,6 +193,9 @@ class Type {
 	 * @return Type
 	 */
 	public function unionWith(Type $otherType) {
+		if ($this->equals($otherType)) {
+			return new self($this->type, $this->subTypes, $this->userType);
+		}
 		$thisSubtypes = $this->type === self::TYPE_UNION ? $this->subTypes : [$this];
 		$otherSubtypes = $otherType->type === self::TYPE_UNION ? $otherType->subTypes : [$otherType];
 		$subtypes = self::unique(array_merge($thisSubtypes, $otherSubtypes));
@@ -190,6 +207,9 @@ class Type {
 	 * @return Type
 	 */
     public function intersectionWith(Type $otherType) {
+    	if ($this->equals($otherType)) {
+		    return new self($this->type, $this->subTypes, $this->userType);
+	    }
 	    $thisSubtypes = $this->type === self::TYPE_INTERSECTION ? $this->subTypes : [$this];
 	    $otherSubtypes = $otherType->type === self::TYPE_INTERSECTION ? $otherType->subTypes : [$otherType];
 	    $subtypes = self::unique(array_merge($thisSubtypes, $otherSubtypes));
