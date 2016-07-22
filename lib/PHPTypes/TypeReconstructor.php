@@ -73,7 +73,9 @@ class TypeReconstructor {
                     throw new \LogicException("Handler for " . get_class($prev) . " returned a non-array");
                 }
                 foreach ($type as $t) {
-                    assert($t instanceof Type);
+                    if ($t instanceof Type === false) {
+	                    throw new \LogicException("Handler for " . get_class($prev) . " returned a non-type");
+                    }
                     $types[] = $t;
                 }
             } else {
@@ -384,7 +386,7 @@ class TypeReconstructor {
 			    if (!empty($types)) {
 				    return $types;
 			    }
-			    $types = $this->resolvePolymorphicMethodCall($classname, '__get');
+			    $types = $this->resolvePolymorphicProperty($classname, '__get');
 			    if (!empty($types)) {
 				    return $types;
 			    }
