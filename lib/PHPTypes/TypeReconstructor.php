@@ -66,15 +66,16 @@ class TypeReconstructor {
 
     protected function resolveVar(Operand $var, SplObjectStorage $resolved) {
         $types = [];
+	    /** @var Op $prev */
         foreach ($var->ops as $prev) {
             $type = $this->resolveVarOp($var, $prev, $resolved);
             if ($type) {
                 if (!is_array($type)) {
-                    throw new \LogicException("Handler for " . get_class($prev) . " returned a non-array");
+                    throw new \LogicException(sprintf('Handler for %s@%s:%d returned a non-array', $prev->getType(), $prev->getFile(), $prev->getLine()));
                 }
                 foreach ($type as $t) {
                     if ($t instanceof Type === false) {
-	                    throw new \LogicException("Handler for " . get_class($prev) . " returned a non-type");
+	                    throw new \LogicException(sprintf('Handler for %s@%s:%d returned a non-type', $prev->getType(), $prev->getFile(), $prev->getLine()));
                     }
                     $types[] = $t;
                 }
@@ -319,11 +320,7 @@ class TypeReconstructor {
 			$name = strtolower($op->name->value);
 			$classname = $this->resolveClassName($op->var, $resolved);
 			if ($classname) {
-				$types = $this->resolvePolymorphicMethodCall($classname, $name);
-				if (!empty($types)) {
-					return $types;
-				}
-				$types = $this->resolvePolymorphicMethodCall($classname, '__call');
+				$types = $this->resolvePolymorphicMethodCall($classname, $name, false);
 				if (!empty($types)) {
 					return $types;
 				}
@@ -337,11 +334,7 @@ class TypeReconstructor {
 			$name = strtolower($op->name->value);
 			$classname = $this->resolveClassName($op->class, $resolved);
 			if ($classname) {
-				$types = $this->resolvePolymorphicMethodCall($classname, $name);
-				if (!empty($types)) {
-					return $types;
-				}
-				$types = $this->resolvePolymorphicMethodCall($classname, '__callstatic');
+				$types = $this->resolvePolymorphicMethodCall($classname, $name, true);
 				if (!empty($types)) {
 					return $types;
 				}
@@ -382,11 +375,7 @@ class TypeReconstructor {
 		    $propname = strtolower($op->name->value);
 		    $classname = $this->resolveClassName($op->var, $resolved);
 		    if ($classname !== null) {
-			    $types = $this->resolvePolymorphicProperty($classname, $propname);
-			    if (!empty($types)) {
-				    return $types;
-			    }
-			    $types = $this->resolvePolymorphicProperty($classname, '__get');
+			    $types = $this->resolvePolymorphicProperty($classname, $propname, false);
 			    if (!empty($types)) {
 				    return $types;
 			    }
@@ -400,7 +389,7 @@ class TypeReconstructor {
 			$propname = strtolower($op->name->value);
 			$classname = $this->resolveClassName($op->class, $resolved);
 			if ($classname !== null) {
-				$types = $this->resolvePolymorphicProperty($classname, $propname);
+				$types = $this->resolvePolymorphicProperty($classname, $propname, true);
 				if (!empty($types)) {
 					return $types;
 				}
@@ -526,6 +515,7 @@ class TypeReconstructor {
 	}
 
 	private function resolveClassName($class, SplObjectStorage $resolved) {
+		$userType = null;
 		if ($resolved->contains($class)) {
 			if ($resolved[$class]->type === Type::TYPE_STRING) {
 				if ($class instanceof Operand\Literal) {
@@ -535,24 +525,41 @@ class TypeReconstructor {
 				$userType = $resolved[$class]->userType;
 			}
 		}
-
 		if (isset($userType)) {
-			return strtolower($userType);
+			$userType = strtolower($userType);
 		}
+		return $userType;
 	}
 
-	private function resolvePolymorphicMethodCall($classname, $methodname) {
-		$types = [];
+	/**
+	 * @param string $classname
+	 * @param string $methodname
+	 * @param bool $is_static_call
+	 * @return Type[]
+	 */
+	private function resolvePolymorphicMethodCall($classname, $methodname, $is_static_call) {
+		$alltypes = [];
 		if (isset($this->state->classResolvedBy[$classname])) {
 			foreach ($this->state->classResolvedBy[$classname] as $sclassname) {
-				foreach ($this->resolveMethodCall($sclassname, $methodname) as $type) {
-					$types[] = $type;
+				$classtypes = $this->resolveMethodCall($sclassname, $methodname);
+				if (!empty($classtypes)) {
+					$alltypes = array_merge($alltypes, $classtypes);
+				} else {
+					$classtypes = $this->resolveMethodCall($sclassname, $is_static_call ? '__callStatic' : '__call');
+					if (!empty($classtypes)) {
+						$alltypes = array_merge($alltypes, $classtypes);
+					}
 				}
 			}
 		}
-		return $types;
+		return $alltypes;
 	}
 
+	/**
+	 * @param string $classname
+	 * @param string $methodname
+	 * @return Type[]
+	 */
 	private function resolveMethodCall($classname, $methodname) {
 		$types = [];
 		if (isset($this->state->classLookup[$classname])) {
@@ -600,7 +607,7 @@ class TypeReconstructor {
 				$type = Type::fromDecl($methodInfo['return']);
 			}
 		} else if (isset($this->state->internalTypeInfo->classExtends[$classname])) {
-			$type = $this->resolveMethodCall($this->state->internalTypeInfo->classExtends[$classname], $methodname);
+			$type = $this->resolveBuiltinMethodCall($this->state->internalTypeInfo->classExtends[$classname], $methodname);
 		}
 		return $type;
 	}
@@ -608,18 +615,25 @@ class TypeReconstructor {
 	/**
 	 * @param string $classname
 	 * @param string $propname
+	 * @param bool $is_static_access
 	 * @return Type[]
 	 */
-	private function resolvePolymorphicProperty($classname, $propname) {
-		$types = [];
+	private function resolvePolymorphicProperty($classname, $propname, $is_static_access) {
+		$alltypes = [];
 		if (isset($this->state->classResolvedBy[$classname])) {
 			foreach ($this->state->classResolvedBy[$classname] as $sclassname) {
-				foreach ($this->resolveProperty($sclassname, $propname) as $type) {
-					$types[] = $type;
+				$classtypes = $this->resolveProperty($sclassname, $propname);
+				if (!empty($alltypes)) {
+					$alltypes = array_merge($alltypes, $classtypes);
+				} else if (!$is_static_access) {
+					$classtypes = $this->resolveMethodCall($sclassname, '__get');
+					if (!empty($classtypes)) {
+						$alltypes = array_merge($alltypes, $classtypes);
+					}
 				}
 			}
 		}
-		return $types;
+		return $alltypes;
 	}
 
 	/**
