@@ -441,6 +441,7 @@ class TypeReconstructor {
 		    	return $types;
 		    }
 	    }
+	    return false;
     }
 
     protected function resolveOp_Terminal_StaticVar(Operand $var, Op\Terminal\StaticVar $op, SplObjectStorage $resolved) {
@@ -710,7 +711,9 @@ class TypeReconstructor {
 			foreach ($this->state->classLookup[$classname] as $class) {
 				if (isset($this->state->classConstantLookup[$class][$constname])) {
 					foreach ($this->state->classConstantLookup[$class][$constname] as $classconst) {
-						$types[] = $classconst->value->type;
+						if ($classconst->value->type !== null) {
+							$types[] = $classconst->value->type;
+						}
 					}
 				} else if ($class->extends !== null) {
 					foreach ($this->resolveClassConstant(strtolower($class->extends->value), $constname) as $type) {
