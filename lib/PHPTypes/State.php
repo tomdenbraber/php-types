@@ -195,20 +195,24 @@ class State {
 	    while (!empty($queue)) {
 	    	$name = array_shift($queue);
 		    foreach ($this->classResolves[$name] as $pname) {
-		    	foreach ($this->classResolves[$pname] as $ppname) {
-					if (!isset($this->classResolves[$name][$ppname])) {
-						$this->classResolves[$name][$ppname] = $ppname;
-						$this->classResolvedBy[$ppname][$name] = $name;
-						$queue[$pname] = $pname;  // propagate up
-					}
+		    	if (isset($this->classResolves[$pname])) {
+				    foreach ($this->classResolves[$pname] as $ppname) {
+					    if (!isset($this->classResolves[$name][$ppname])) {
+						    $this->classResolves[$name][$ppname] = $ppname;
+						    $this->classResolvedBy[$ppname][$name] = $name;
+						    $queue[$pname] = $pname;  // propagate up
+					    }
+				    }
 			    }
 		    }
 		    foreach ($this->classResolvedBy[$name] as $sname) {
-		    	foreach ($this->classResolvedBy[$sname] as $ssname) {
-				    if (!isset($this->classResolvedBy[$name][$ssname])) {
-					    $this->classResolvedBy[$name][$ssname] = $ssname;
-					    $this->classResolves[$ssname][$name] = $name;
-					    $queue[$sname] = $sname;  // propagate down
+		    	if (isset($this->classResolvedBy[$sname])) {
+				    foreach ($this->classResolvedBy[$sname] as $ssname) {
+					    if (!isset($this->classResolvedBy[$name][$ssname])) {
+						    $this->classResolvedBy[$name][$ssname] = $ssname;
+						    $this->classResolves[$ssname][$name] = $name;
+						    $queue[$sname] = $sname;  // propagate down
+					    }
 				    }
 			    }
 		    }
