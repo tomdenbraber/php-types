@@ -1,0 +1,63 @@
+<?php
+
+class A {
+	public function foo() : string {}
+}
+
+class B {
+	public function foo() : int {}
+}
+
+class C {
+	/**
+	 * @param A|B $ab
+	 */
+	public function bar($ab) {
+		return $ab->foo();
+	}
+}
+
+-----
+Block#1
+    Stmt_Class
+        name: LITERAL<string>('A')
+        stmts: Block#2
+    Stmt_Class
+        name: LITERAL<string>('B')
+        stmts: Block#3
+    Stmt_Class
+        name: LITERAL<string>('C')
+        stmts: Block#4
+    Terminal_Return
+        expr: LITERAL<int>(1)
+
+Block#2
+    Stmt_ClassMethod<foo>
+
+Block#3
+    Stmt_ClassMethod<foo>
+
+Block#4
+    Stmt_ClassMethod<bar>
+
+Function A::foo():
+Block#1
+    Terminal_Return
+        expr: LITERAL<null>(NULL)
+
+Function B::foo():
+Block#1
+    Terminal_Return
+        expr: LITERAL<null>(NULL)
+
+Function C::bar():
+Block#1
+    Expr_Param
+        name: LITERAL('ab')
+        result: Var<A|B>#1<$ab>
+    Expr_MethodCall
+        var: Var<A|B>#1<$ab>
+        name: LITERAL<string>('foo')
+        result: Var<int|string>#2
+    Terminal_Return
+        expr: Var<int|string>#2

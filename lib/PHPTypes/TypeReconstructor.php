@@ -318,9 +318,12 @@ class TypeReconstructor {
 	protected function resolveOp_Expr_MethodCall(Operand $var, Op\Expr\MethodCall $op, SplObjectStorage $resolved) {
 		if ($op->name instanceof Operand\Literal) {
 			$name = strtolower($op->name->value);
-			$classname = $this->resolveClassName($op->var, $resolved);
-			if ($classname) {
-				$types = $this->resolvePolymorphicMethodCall($classname, $name, false);
+			$classnames = $this->resolveClassNames($op->var, $resolved);
+			if (!empty($classnames)) {
+				$types = [];
+				foreach ($classnames as $classname) {
+					$types = array_merge($types, $this->resolvePolymorphicMethodCall($classname, $name, false));
+				}
 				if (!empty($types)) {
 					return $types;
 				}
@@ -332,9 +335,12 @@ class TypeReconstructor {
 	protected function resolveOp_Expr_StaticCall(Operand $var, Op\Expr\StaticCall $op, SplObjectStorage $resolved) {
 		if ($op->name instanceof Operand\Literal) {
 			$name = strtolower($op->name->value);
-			$classname = $this->resolveClassName($op->class, $resolved);
-			if ($classname) {
-				$types = $this->resolvePolymorphicMethodCall($classname, $name, true);
+			$classnames = $this->resolveClassNames($op->class, $resolved);
+			if (!empty($classnames)) {
+				$types = [];
+				foreach ($classnames as $classname) {
+					$types = array_merge($types, $this->resolvePolymorphicMethodCall($classname, $name, true));
+				}
 				if (!empty($types)) {
 					return $types;
 				}
@@ -373,9 +379,12 @@ class TypeReconstructor {
     protected function resolveOp_Expr_PropertyFetch(Operand $var, Op\Expr\PropertyFetch $op, SplObjectStorage $resolved) {
 	    if ($op->name instanceof Operand\Literal) {
 		    $propname = strtolower($op->name->value);
-		    $classname = $this->resolveClassName($op->var, $resolved);
-		    if ($classname !== null) {
-			    $types = $this->resolvePolymorphicProperty($classname, $propname, false);
+		    $classnames = $this->resolveClassNames($op->var, $resolved);
+		    if (!empty($classnames)) {
+		    	$types = [];
+			    foreach ($classnames as $classname) {
+				    $types = array_merge($types, $this->resolvePolymorphicProperty($classname, $propname, false));
+			    }
 			    if (!empty($types)) {
 				    return $types;
 			    }
@@ -387,9 +396,12 @@ class TypeReconstructor {
 	protected function resolveOp_Expr_StaticPropertyFetch(Operand $var, Op\Expr\StaticPropertyFetch $op, SplObjectStorage $resolved) {
 		if ($op->name instanceof Operand\Literal) {
 			$propname = strtolower($op->name->value);
-			$classname = $this->resolveClassName($op->class, $resolved);
-			if ($classname !== null) {
-				$types = $this->resolvePolymorphicProperty($classname, $propname, true);
+			$classnames = $this->resolveClassNames($op->class, $resolved);
+			if (!empty($classname)) {
+				$types = [];
+				foreach ($classnames as $classname) {
+					$types = array_merge($types, $this->resolvePolymorphicProperty($classname, $propname, true));
+				}
 				if (!empty($types)) {
 					return $types;
 				}
@@ -432,13 +444,16 @@ class TypeReconstructor {
     }
 
     protected function resolveOp_Expr_ClassConstFetch(Operand $var, Op\Expr\ClassConstFetch $op, SplObjectStorage $resolved) {
-    	$classname = $this->resolveClassName($op->class, $resolved);
-	    if ($classname !== null) {
-	    	assert($op->name instanceof Operand\Literal);
-		    $constname = strtolower($op->name->value);
-		    $types = $this->resolvePolymorphicClassConstant($classname, $constname);
+    	$classnames = $this->resolveClassNames($op->class, $resolved);
+	    if (!empty($classnames)) {
+	    	$types = [];
+	    	foreach ($classnames as $classname) {
+			    assert($op->name instanceof Operand\Literal);
+			    $constname = strtolower($op->name->value);
+			    $types = array_merge($types, $this->resolvePolymorphicClassConstant($classname, $constname));
+		    }
 		    if (!empty($types)) {
-		    	return $types;
+			    return $types;
 		    }
 	    }
 	    return false;
@@ -515,21 +530,34 @@ class TypeReconstructor {
 		return false;
 	}
 
-	private function resolveClassName($class, SplObjectStorage $resolved) {
-		$userType = null;
-		if ($resolved->contains($class)) {
-			if ($resolved[$class]->type === Type::TYPE_STRING) {
-				if ($class instanceof Operand\Literal) {
-					$userType = $class->value;
+	private function resolveClassNames(Operand $operand, SplObjectStorage $resolved) {
+		$classnames = [];
+		if ($resolved->contains($operand)) {
+			$type = $resolved[$operand];
+			if ($type->type === Type::TYPE_STRING) {
+				if ($operand instanceof Operand\Literal) {
+					$classnames[] = strtolower($operand->value);
 				}
-			} else if ($resolved[$class]->type === Type::TYPE_OBJECT) {
-				$userType = $resolved[$class]->userType;
+			} else {
+				$classnames = array_merge($classnames, $this->resolveClassNamesFromUserTypes($type));
 			}
 		}
-		if (isset($userType)) {
-			$userType = strtolower($userType);
+		return $classnames;
+	}
+
+	private function resolveClassNamesFromUserTypes(Type $type) {
+		$classnames = [];
+		switch($type->type) {
+			case Type::TYPE_OBJECT:
+				$classnames[] = strtolower($type->userType);
+				break;
+			case Type::TYPE_UNION:
+				foreach ($type->subTypes as $subType) {
+					$classnames = array_merge($classnames, $this->resolveClassNamesFromUserTypes($subType));
+				}
+				break;
 		}
-		return $userType;
+		return $classnames;
 	}
 
 	/**
