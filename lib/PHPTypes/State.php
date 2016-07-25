@@ -177,7 +177,6 @@ class State {
 		    if ($class->extends !== null) {
 			    assert($class->extends instanceof Operand\Literal);
 			    $pname = strtolower($class->extends->value);
-			    $this->classExtends[$name][$pname] = $pname;
 			    $this->classResolves[$name][$pname] = $pname;
 			    $this->classResolvedBy[$pname][$name] = $name;
 		    }
