@@ -203,7 +203,7 @@ class Type {
 		$thisSubtypes = $this->type === self::TYPE_UNION ? $this->subTypes : [$this];
 		$otherSubtypes = $otherType->type === self::TYPE_UNION ? $otherType->subTypes : [$otherType];
 		$subtypes = self::unique(array_merge($thisSubtypes, $otherSubtypes));
-		return new self(self::TYPE_UNION, $subtypes);
+		return count($subtypes) === 1 ? $subtypes[0] : new self(self::TYPE_UNION, $subtypes);
     }
 
 	/**
@@ -217,7 +217,7 @@ class Type {
 	    $thisSubtypes = $this->type === self::TYPE_INTERSECTION ? $this->subTypes : [$this];
 	    $otherSubtypes = $otherType->type === self::TYPE_INTERSECTION ? $otherType->subTypes : [$otherType];
 	    $subtypes = self::unique(array_merge($thisSubtypes, $otherSubtypes));
-	    return new self(self::TYPE_INTERSECTION, $subtypes);
+	    return count($subtypes) === 1 ? $subtypes[0] : new self(self::TYPE_INTERSECTION, $subtypes);
     }
 
 	/**
@@ -355,9 +355,10 @@ class Type {
 	 * @return Type|null
 	 */
 	public static function union($types) {
+		/** @var Type|null $result */
 		$result = null;
 		foreach ($types as $type) {
-			$result = $result === null ? $type : $type->unionWith($result);
+			$result = $result === null ? $type : $result->unionWith($type);
 		}
 		return $result;
 	}
@@ -367,9 +368,10 @@ class Type {
 	 * @return Type|null
 	 */
 	public static function intersection($types) {
+		/** @var Type|null $result */
 		$result = null;
 		foreach ($types as $type) {
-			$result = $result === null ? $type : $type->intersectionWith($result);
+			$result = $result === null ? $type : $result->intersectionWith($type);
 		}
 		return $result;
 	}

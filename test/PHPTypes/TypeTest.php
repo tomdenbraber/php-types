@@ -34,4 +34,33 @@ class TypeTest extends \PHPUnit_Framework_TestCase {
         $this->assertEquals($decl, (string) $type);
     }
 
+    public function provideTestUnion() {
+    	return [
+		    [[new Type(Type::TYPE_LONG), new Type(Type::TYPE_STRING)], new Type(Type::TYPE_UNION, [new Type(Type::TYPE_LONG), new Type(Type::TYPE_STRING)])],
+		    [[new Type(Type::TYPE_LONG), new Type(Type::TYPE_LONG)], new Type(Type::TYPE_LONG)],
+	    ];
+    }
+
+    /**
+     * @dataProvider provideTestUnion
+     */
+    public function testUnion($types, $expected) {
+	    $type = Type::union($types);
+	    $this->assertEquals($expected, $type);
+    }
+
+	public function provideTestIntersection() {
+		return [
+			[[new Type(Type::TYPE_LONG), new Type(Type::TYPE_STRING)], new Type(Type::TYPE_INTERSECTION, [new Type(Type::TYPE_LONG), new Type(Type::TYPE_STRING)])],
+			[[new Type(Type::TYPE_LONG), new Type(Type::TYPE_LONG)], new Type(Type::TYPE_LONG)],
+		];
+	}
+
+    /**
+     * @dataProvider provideTestIntersection
+     */
+    public function testIntersection($types, $expected) {
+	    $type = Type::intersection($types);
+	    $this->assertEquals($expected, $type);
+    }
 }
