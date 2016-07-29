@@ -84,7 +84,7 @@ class TypeReconstructor {
 				} else {
 					return false;
 				}
-			} catch (\Exception $e) {
+			} catch (\LogicException $e) {
 				throw new \LogicException(sprintf('Exception raised while handling op %s@%s:%d', $prev->getType(), $prev->getFile(), $prev->getLine()), 0, $e);
 			}
 		}

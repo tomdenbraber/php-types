@@ -50,7 +50,7 @@ class Type {
 	public function __construct($type, array $subTypes = [], $userType = null) {
 		foreach ($subTypes as $sub) {
 			if (!$sub instanceof Type) {
-				throw new \RuntimeException("Subtypes must implement Type");
+				throw new \LogicException("Subtypes must implement Type");
 			}
 		}
 		if ($type === self::TYPE_OBJECT) {
@@ -111,7 +111,7 @@ class Type {
 			return implode('&', $subTypeStrings);
 		}
 
-		throw new \RuntimeException("Assertion failure: unknown type {$this->type}");
+		throw new \LogicException("Assertion failure: unknown type {$this->type}");
 	}
 
 	public function hasSubtypes() {
@@ -444,7 +444,7 @@ class Type {
 		if ($decl instanceof Type) {
 			return $decl;
 		} elseif (!is_string($decl)) {
-			throw new \LogicException("Should never happen");
+			throw new \RuntimeException("Decl is not a string");
 		} elseif (empty($decl)) {
 			throw new \RuntimeException("Empty declaration found");
 		}
