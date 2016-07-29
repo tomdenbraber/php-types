@@ -69,19 +69,23 @@ class TypeReconstructor {
 		$types = [];
 		/** @var Op $prev */
 		foreach ($var->ops as $prev) {
-			$type = $this->resolveVarOp($var, $prev, $resolved);
-			if ($type) {
-				if (!is_array($type)) {
-					throw new \LogicException(sprintf('Handler for %s@%s:%d returned a non-array', $prev->getType(), $prev->getFile(), $prev->getLine()));
-				}
-				foreach ($type as $t) {
-					if ($t instanceof Type === false) {
-						throw new \LogicException(sprintf('Handler for %s@%s:%d returned a non-type', $prev->getType(), $prev->getFile(), $prev->getLine()));
+			try {
+				$type = $this->resolveVarOp($var, $prev, $resolved);
+				if ($type) {
+					if (!is_array($type)) {
+						throw new \LogicException('Handler returned a non-array');
 					}
-					$types[] = $t;
+					foreach ($type as $t) {
+						if ($t instanceof Type === false) {
+							throw new \LogicException('Handler returned non-type');
+						}
+						$types[] = $t;
+					}
+				} else {
+					return false;
 				}
-			} else {
-				return false;
+			} catch (\Exception $e) {
+				throw new \LogicException(sprintf('Exception raised while handling op %s@%s:%d', $prev->getType(), $prev->getFile(), $prev->getLine()), 0, $e);
 			}
 		}
 		if (empty($types)) {
