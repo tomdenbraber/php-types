@@ -657,7 +657,7 @@ class TypeReconstructor {
 		if (isset($this->state->classResolvedBy[$classname])) {
 			foreach ($this->state->classResolvedBy[$classname] as $sclassname) {
 				$classtypes = $this->resolveProperty($sclassname, $propname);
-				if (!empty($alltypes)) {
+				if (!empty($classtypes)) {
 					$alltypes = array_merge($alltypes, $classtypes);
 				} else if (!$is_static_access) {
 					$classtypes = $this->resolveMethodCall($sclassname, '__get');
