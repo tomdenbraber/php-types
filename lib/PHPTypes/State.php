@@ -93,9 +93,11 @@ class State {
         $declarations = new Visitor\DeclarationFinder;
         $calls = new Visitor\CallFinder;
         $variables = new Visitor\VariableFinder;
+        $trait_resolver = new Visitor\TraitToClassLinker;
         $traverser->addVisitor($declarations);
         $traverser->addVisitor($calls);
         $traverser->addVisitor($variables);
+        $traverser->addVisitor($trait_resolver);
 
         foreach ($this->scripts as $script) {
             $traverser->traverse($script);
@@ -185,6 +187,12 @@ class State {
 			    $iname = strtolower($implements->value);
 			    $this->classResolves[$name][$iname] = $iname;
 			    $this->classResolvedBy[$iname][$name] = $name;
+		    }
+		    foreach ($class->uses as $uses) {
+		    	assert($uses instanceof Operand\Literal);
+		    	$tname = strtolower($uses->value);
+		    	$this->classResolves[$name][$tname] = $tname;
+		    	$this->classResolvedBy[$tname][$name] = $name;
 		    }
 	    }
 
