@@ -172,6 +172,12 @@ class State {
 			    }
 		    }
 	    }
+	    foreach ($this->traits as $trait) {
+	    	$name = strtolower($trait->name->value);
+	    	$this->classResolves[$name][$name] = $name;
+	    	$this->classResolvedBy[$name][$name] = $name;
+	    }
+
 	    foreach ($this->classes as $class) {
 	    	$name = strtolower($class->name->value);
 		    $this->classResolves[$name][$name] = $name;
