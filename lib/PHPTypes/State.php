@@ -225,4 +225,28 @@ class State {
 		    }
 	    }
     }
+
+	/**
+	 * Returns whether the given string is a class in the system loaded as CFG
+	 * @return bool
+	 */
+	public function isClass(string $class_name) {
+		return isset($this->classes[$class_name]);
+	}
+
+	/**
+	 * Returns whether the given string is an interface in the system loaded as CFG
+	 * @return bool
+	 */
+	public function isInterface(string $interface_name) {
+		return isset($this->interfaces[$interface_name]);
+	}
+
+	/**
+	 * Returns whether the given string is a trait in the system loaded as CFG
+	 * @return bool
+	 */
+	public function isTrait(string $trait_name) {
+		return isset($this->traits[$trait_name]);
+	}
 }
