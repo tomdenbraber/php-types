@@ -36,12 +36,16 @@ class State {
     public $constants;
     /** @var Op\Stmt\Trait_[] */
     public $traits;
+    /** Op\Stmt\Trait_[][] */
+    public $traitLookup = [];
     /** @var Op\Stmt\Class_[] */
     public $classes;
 	/** @var Op\Stmt\Class_[][] */
 	public $classLookup = [];
     /** @var Op\Stmt\Interface_[] */
     public $interfaces;
+	/** Op\Stmt\Interface_[][] */
+	public $interfaceLookup = [];
     /** @var Op\Stmt\ClassMethod[] */
     public $methods;
     /** @var \SplObjectStorage|Op\Stmt\ClassMethod[][][] */
@@ -113,6 +117,8 @@ class State {
 
         $this->buildFunctionLookup($this->functions);
 	    $this->buildClassLookups($this->classes);
+	    $this->buildTraitLookups($this->traits);
+	    $this->buildInterfaceLookups($this->interfaces);
 
         $this->funcCalls = $calls->getFuncCalls();
         $this->nsFuncCalls = $calls->getNsFuncCalls();
@@ -120,7 +126,6 @@ class State {
         $this->staticCalls = $calls->getStaticCalls();
         $this->newCalls = $calls->getNewCalls();
 
-	    $this->buildClassLookups($this->classes);
         $this->computeTypeMatrix();
     }
 
@@ -157,6 +162,50 @@ class State {
 		    $this->classConstantLookup[$class] = $constants;
 	    }
     }
+
+	/**
+	 * @param Op\Stmt\Trait_[] $traits
+	 */
+	private function buildTraitLookups(array $traits) {
+		foreach ($traits as $trait) {
+			$methods = [];
+			$properties = [];
+			$constants = [];
+			foreach ($trait->stmts->children as $op) {
+				if ($op instanceof Op\Stmt\ClassMethod) {
+					$methods[strtolower($op->getFunc()->name)][] = $op;
+				} else if ($op instanceof Op\Stmt\Property) {
+					$properties[strtolower($op->name->value)][] = $op;
+				} else if ($op instanceof Op\Terminal\Const_) {
+					$constants[strtolower($op->name->value)][] = $op;
+				}
+			}
+			$this->traitLookup[strtolower($trait->name->value)][] = $trait;
+			$this->methodLookup[$trait] = $methods;
+			$this->propertyLookup[$trait] = $properties;
+			$this->classConstantLookup[$trait] = $constants;
+		}
+	}
+
+	/**
+	 * @param Op\Stmt\Interface_[] $interfaces
+	 */
+	private function buildInterfaceLookups(array $interfaces) {
+		foreach ($interfaces as $interface) {
+			$methods = [];
+			$constants = [];
+			foreach ($interface->stmts->children as $op) {
+				if ($op instanceof Op\Stmt\ClassMethod) {
+					$methods[strtolower($op->getFunc()->name)][] = $op;
+				} else if ($op instanceof Op\Terminal\Const_) {
+					$constants[strtolower($op->name->value)][] = $op;
+				}
+			}
+			$this->interfaceLookup[strtolower($interface->name->value)][] = $interface;
+			$this->methodLookup[$interface] = $methods;
+			$this->classConstantLookup[$interface] = $constants;
+		}
+	}
 
     private function computeTypeMatrix() {
 	    foreach ($this->interfaces as $interface) {
@@ -237,7 +286,7 @@ class State {
 	 * @return bool
 	 */
 	public function isClass(string $class_name) {
-		return isset($this->classes[$class_name]);
+		return isset($this->classLookup[$class_name]);
 	}
 
 	/**
@@ -245,7 +294,7 @@ class State {
 	 * @return bool
 	 */
 	public function isInterface(string $interface_name) {
-		return isset($this->interfaces[$interface_name]);
+		return isset($this->interfaceLookup[$interface_name]);
 	}
 
 	/**
@@ -253,6 +302,6 @@ class State {
 	 * @return bool
 	 */
 	public function isTrait(string $trait_name) {
-		return isset($this->traits[$trait_name]);
+		return isset($this->traitLookup[$trait_name]);
 	}
 }
