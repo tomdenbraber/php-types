@@ -170,6 +170,7 @@ class TypeReconstructor {
 			case 'Expr_BinaryOp_Mod':
 			case 'Expr_BinaryOp_ShiftLeft':
 			case 'Expr_BinaryOp_ShiftRight':
+			case 'Expr_BinaryOp_Spaceship':
 			case 'Expr_Cast_Int':
 			case 'Expr_Print':
 				return [Type::int()];
