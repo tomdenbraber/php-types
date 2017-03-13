@@ -187,6 +187,11 @@ class TypeReconstructor {
 					return [Type::numeric()];
 				}
 				return false;
+			case 'Expr_BinaryOp_Coalesce':
+				if ($resolved->contains($op->left) && $resolved->contains($op->right)) {
+					return [$resolved[$op->left], $resolved[$op->right]];
+				}
+				return false;
 			case 'Expr_Eval':
 				return false;
 			case 'Iterator_Key':
