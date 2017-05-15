@@ -225,6 +225,12 @@ class State {
 	    	$name = strtolower($trait->name->value);
 	    	$this->classResolves[$name][$name] = $name;
 	    	$this->classResolvedBy[$name][$name] = $name;
+	    	foreach ($trait->uses as $use) {
+	    		assert($use instanceof Operand\Literal);
+	    		$tname = strtolower($use->value);
+	    		$this->classResolves[$name][$tname] = $tname;
+	    		$this->classResolvedBy[$tname][$name] = $name;
+		    }
 	    }
 
 	    foreach ($this->classes as $class) {
